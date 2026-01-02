@@ -1,5 +1,7 @@
 """Tests for disk_offload module functions."""
 
+import gc
+
 import pytest
 import torch
 
@@ -11,6 +13,13 @@ from circuit_tracer.utils.disk_offload import (
     disk_offload_module,
     offload_modules,
 )
+
+
+@pytest.fixture(autouse=True)
+def cleanup_cuda():
+    yield
+    torch.cuda.empty_cache()
+    gc.collect()
 
 
 @pytest.fixture
