@@ -143,6 +143,7 @@ class NNSightReplacementModel(LanguageModel):
             attn_implementation="eager",
         )
 
+        model._hf_config = config  # Store under a safe name (nnsight may override .config)
         model._configure_replacement_model(transcoders)
         return model
 
@@ -387,22 +388,25 @@ class NNSightReplacementModel(LanguageModel):
 
     @contextmanager
     def zero_softcap(self):
-        if hasattr(self.config, "final_logit_softcapping"):
-            current_softcap = self.config.final_logit_softcapping  # type: ignore
+        # Use _hf_config (the real HuggingFace config) since nnsight may not
+        # reliably expose .config, and we need to mutate final_logit_softcapping.
+        hf_cfg = getattr(self, "_hf_config", None) or self.config
+        if hasattr(hf_cfg, "final_logit_softcapping"):
+            current_softcap = hf_cfg.final_logit_softcapping  # type: ignore
             try:
-                self.config.final_logit_softcapping = None  # type: ignore
+                hf_cfg.final_logit_softcapping = None  # type: ignore
                 yield
             finally:
-                self.config.final_logit_softcapping = current_softcap  # type: ignore
-        elif hasattr(self.config, "text_config") and hasattr(
-            self.config.text_config, "final_logit_softcapping"
+                hf_cfg.final_logit_softcapping = current_softcap  # type: ignore
+        elif hasattr(hf_cfg, "text_config") and hasattr(
+            hf_cfg.text_config, "final_logit_softcapping"
         ):
-            current_softcap = self.config.text_config.final_logit_softcapping  # type: ignore
+            current_softcap = hf_cfg.text_config.final_logit_softcapping  # type: ignore
             try:
-                self.config.text_config.final_logit_softcapping = None  # type: ignore
+                hf_cfg.text_config.final_logit_softcapping = None  # type: ignore
                 yield
             finally:
-                self.config.text_config.final_logit_softcapping = current_softcap  # type: ignore
+                hf_cfg.text_config.final_logit_softcapping = current_softcap  # type: ignore
         else:
             yield
 
@@ -418,7 +422,7 @@ class NNSightReplacementModel(LanguageModel):
     @property
     def model_config(self):
         """Model configuration object, backend-agnostic accessor."""
-        return self.config
+        return self.cfg
 
     def run_forward_pass(self, input_ids: torch.Tensor, batch_size: int, ctx) -> None:
         """Execute the forward pass and cache residual activations."""
