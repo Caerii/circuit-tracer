@@ -9,7 +9,7 @@ from torch import device
 from tqdm import tqdm
 from transformers import AutoConfig, GptOssConfig
 
-from circuit_tracer import attribute, Graph, ReplacementModel
+from circuit_tracer import Graph, ReplacementModel, attribute
 from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from circuit_tracer.transcoder import SingleLayerTranscoder, TranscoderSet
 from circuit_tracer.transcoder.activation_functions import JumpReLU

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, LlamaConfig
 
-from circuit_tracer import attribute, ReplacementModel
+from circuit_tracer import ReplacementModel, attribute
 from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from circuit_tracer.transcoder import SingleLayerTranscoder, TranscoderSet
 from circuit_tracer.transcoder.activation_functions import TopK

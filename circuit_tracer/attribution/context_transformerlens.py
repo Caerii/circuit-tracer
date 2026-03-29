@@ -4,8 +4,9 @@ Attribution context for managing hooks during attribution computation.
 
 import contextlib
 import weakref
+from collections.abc import Callable
 from functools import partial
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch

@@ -9,11 +9,11 @@ from nnsight import save
 from tqdm import tqdm
 from transformers import AutoConfig, Gemma3TextConfig
 
-from circuit_tracer import attribute, Graph, ReplacementModel
+from circuit_tracer import Graph, ReplacementModel, attribute
+from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from circuit_tracer.transcoder import SingleLayerTranscoder, TranscoderSet
 from circuit_tracer.transcoder.activation_functions import JumpReLU
 from circuit_tracer.transcoder.cross_layer_transcoder import CrossLayerTranscoder
-from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from tests.conftest import has_32gb
 
 gemma_3_config_dict = {

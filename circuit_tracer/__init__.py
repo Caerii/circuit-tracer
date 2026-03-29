@@ -1,4 +1,11 @@
+from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING
+
+try:
+    __version__ = version("circuit-tracer")
+except PackageNotFoundError:
+    # Editable / source installs — read directly from the single-source file.
+    from circuit_tracer._version import __version__  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from circuit_tracer.attribution.attribute import attribute
@@ -9,6 +16,7 @@ __all__ = [
     "ReplacementModel",
     "Graph",
     "attribute",
+    "__version__",
 ]
 
 

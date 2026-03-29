@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 logger.propagate = False
 
 DEFAULT_FRONTEND_DIR = files("circuit_tracer") / "frontend/assets"
+DEFAULT_PORT = 8032
+COMPRESSION_THRESHOLD_BYTES = 1024**2  # 1 MB
 
 
 class ListHandler(logging.Handler):
@@ -38,11 +40,9 @@ class CircuitGraphHandler(http.server.SimpleHTTPRequestHandler):
         self.data_dir = data_dir
         super().__init__(*args, directory=str(frontend_dir), **kwargs)
 
-    def log_message(self, format, *args):
-        message = format % args
-        logger.info(
-            "%s - - [%s] %s" % (self.address_string(), self.log_date_time_string(), message)
-        )
+    def log_message(self, fmt, *args):
+        message = fmt % args
+        logger.info(f"{self.address_string()} - - [{self.log_date_time_string()}] {message}")
 
     def do_GET(self):
         try:
@@ -80,7 +80,7 @@ class CircuitGraphHandler(http.server.SimpleHTTPRequestHandler):
                 content = f.read()
 
             # Compress large responses
-            if len(content) > 1024**2:  # 1MB threshold
+            if len(content) > COMPRESSION_THRESHOLD_BYTES:
                 content = gzip.compress(content, compresslevel=3)
                 self.send_header("Content-Encoding", "gzip")
 
@@ -189,7 +189,7 @@ class Server:
         return self.logs
 
 
-def serve(data_dir, frontend_dir=None, port=8032):
+def serve(data_dir, frontend_dir=None, port=DEFAULT_PORT):
     """Start a local HTTP server in a separate thread.
 
     Args:

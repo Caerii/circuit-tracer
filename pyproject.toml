@@ -1,19 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "circuit-tracer"
-version = "0.4.1"
-description = "Library for circuit tracing in language models"
+dynamic = ["version"]
+description = "Attribution graphs and circuit tracing for language model interpretability"
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
+authors = [
+    { name = "Michael Hanna" },
+    { name = "Mateusz Piotrowski" },
+    { name = "Decode Research" },
+]
+maintainers = [
+    { name = "Alif Jakir", email = "alif@superintelligent.group" },
+]
+keywords = [
+    "mechanistic-interpretability",
+    "circuit-tracing",
+    "attribution-graphs",
+    "sparse-autoencoders",
+    "transcoders",
+    "transformer-lens",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "einops>=0.8.0",
     "huggingface_hub<1.0.0",
-    "ipykernel>=6.29.5,<7.0.0",
-    "ipywidgets>=8.1.7",
-    "nnsight==0.6.1",
+    "nnsight>=0.6.0",
     "numpy>=1.24.0",
     "pydantic>=2.0.0",
     "safetensors>=0.5.0",
-    "seaborn>=0.13.2",
     "tokenizers>=0.21.0",
     "torch>=2.0.0",
     "tqdm>=4.60.0",
@@ -22,26 +50,59 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "ruff>=0.12.7", "pyright>=1.1.403", "ipython>=8.37.0"]
+viz = [
+    "ipykernel>=6.29.5,<7.0.0",
+    "ipywidgets>=8.1.7",
+    "seaborn>=0.13.2",
+]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.12.7",
+    "pyright>=1.1.403",
+    "ipython>=8.37.0",
+]
+all = [
+    "circuit-tracer[viz,dev]",
+]
 
 [project.scripts]
 circuit-tracer = "circuit_tracer.__main__:main"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[project.urls]
+Homepage = "https://github.com/Caerii/circuit-tracer"
+Documentation = "https://github.com/Caerii/circuit-tracer#readme"
+Repository = "https://github.com/Caerii/circuit-tracer"
+Changelog = "https://github.com/Caerii/circuit-tracer/blob/main/CHANGELOG.md"
+"Original Repository" = "https://github.com/decoderesearch/circuit-tracer"
+
+[tool.hatch.version]
+path = "circuit_tracer/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["circuit_tracer"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "circuit_tracer/",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+]
 
 [tool.ruff]
 line-length = 100
+target-version = "py310"
 exclude = ["*.ipynb", "demos"]
-ignore = ["E501"]
 
 [tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "F",   # pyflakes
+    "I",   # isort (import ordering)
+    "UP",  # pyupgrade (modern Python syntax)
     "TID", # flake8-tidy-imports (includes TID251 for banned-api)
 ]
+ignore = ["E501"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "typing.Union".msg = "Use `|` instead"
@@ -57,9 +118,30 @@ exclude = ["**/node_modules", "**/__pycache__", "**/.*", "demos"]
 [tool.pytest.ini_options]
 markers = [
     "requires_disk: marks tests requiring storage space",
+    "requires_gpu: marks tests requiring a CUDA GPU",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.2",
+    "pytest>=8.0.0",
+    "ruff>=0.12.7",
+    "pyright>=1.1.403",
+    "ipython>=8.37.0",
+    "build>=1.0.0",
+    "twine>=6.0.0",
 ]
+viz = [
+    "ipykernel>=6.29.5,<7.0.0",
+    "ipywidgets>=8.1.7",
+    "seaborn>=0.13.2",
+]
+
+[tool.uv]
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl"
+explicit = true

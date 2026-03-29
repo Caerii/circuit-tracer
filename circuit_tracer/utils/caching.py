@@ -154,7 +154,7 @@ def save_transcoders_to_cache(
         subfolder=hf_uri.file_path,
     )
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     config["repo_id"] = hf_uri.repo_id
@@ -406,7 +406,7 @@ def load_transcoders_from_cache(
     if not config_path.exists():
         raise FileNotFoundError(f"Cache not found for {hf_ref} at {cache_path}")
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     model_kind = config["model_kind"]

@@ -242,8 +242,8 @@ def test_graph_with_tensor_logit_targets():
 )
 def test_graph_serialization_with_logit_targets(logit_targets_input, expected_token_strs):
     """Test that Graph serialization works with both tensor and LogitTarget formats."""
-    import tempfile
     import os
+    import tempfile
 
     cfg = HookedTransformerConfig.from_dict(
         {
@@ -305,8 +305,8 @@ def test_graph_serialization_with_logit_targets(logit_targets_input, expected_to
 
 def test_graph_from_pt_legacy_tensor_format():
     """Test that Graph.from_pt correctly handles legacy serialized graphs with tensor logit_targets."""
-    import tempfile
     import os
+    import tempfile
 
     cfg = HookedTransformerConfig.from_dict(
         {

@@ -4,6 +4,15 @@ import os
 import time
 import warnings
 
+# CLI defaults
+DEFAULT_MAX_N_LOGITS = 10
+DEFAULT_DESIRED_LOGIT_PROB = 0.95
+DEFAULT_BATCH_SIZE = 256
+DEFAULT_MAX_FEATURE_NODES = 7500
+DEFAULT_NODE_THRESHOLD = 0.8
+DEFAULT_EDGE_THRESHOLD = 0.98
+DEFAULT_SERVER_PORT = 8041
+
 
 def main():
     # Configure logging
@@ -54,16 +63,19 @@ def main():
         help="Data type for model weights (default: float32).",
     )
     attr_parser.add_argument(
-        "--max_n_logits", type=int, default=10, help="Maximum number of logit nodes."
+        "--max_n_logits",
+        type=int,
+        default=DEFAULT_MAX_N_LOGITS,
+        help="Maximum number of logit nodes.",
     )
     attr_parser.add_argument(
         "--desired_logit_prob",
         type=float,
-        default=0.95,
+        default=DEFAULT_DESIRED_LOGIT_PROB,
         help="Cumulative probability threshold for top logits.",
     )
     attr_parser.add_argument(
-        "--batch_size", type=int, default=256, help="Batch size for backward passes."
+        "--batch_size", type=int, default=DEFAULT_BATCH_SIZE, help="Batch size for backward passes."
     )
     attr_parser.add_argument(
         "--offload",
@@ -74,7 +86,7 @@ def main():
     attr_parser.add_argument(
         "--max_feature_nodes",
         type=int,
-        default=7500,
+        default=DEFAULT_MAX_FEATURE_NODES,
         help="Maximum number of feature nodes.",
     )
     attr_parser.add_argument("--verbose", action="store_true", help="Display progress information.")
@@ -117,13 +129,13 @@ def main():
     attr_parser.add_argument(
         "--node_threshold",
         type=float,
-        default=0.8,
+        default=DEFAULT_NODE_THRESHOLD,
         help="Node threshold for pruning graph files.",
     )
     attr_parser.add_argument(
         "--edge_threshold",
         type=float,
-        default=0.98,
+        default=DEFAULT_EDGE_THRESHOLD,
         help="Edge threshold for pruning graph files.",
     )
 
@@ -133,7 +145,9 @@ def main():
         action="store_true",
         help="Start a local server to visualize graphs after processing.",
     )
-    attr_parser.add_argument("--port", type=int, default=8041, help="Port for the local server.")
+    attr_parser.add_argument(
+        "--port", type=int, default=DEFAULT_SERVER_PORT, help="Port for the local server."
+    )
 
     # Start-server subcommand
     server_parser = subparsers.add_parser(
@@ -145,13 +159,17 @@ def main():
         required=True,
         help="Path to the directory containing graph JSON files.",
     )
-    server_parser.add_argument("--port", type=int, default=8041, help="Port for the local server.")
+    server_parser.add_argument(
+        "--port", type=int, default=DEFAULT_SERVER_PORT, help="Port for the local server."
+    )
 
     args = parser.parse_args()
 
     if args.command == "attribute":
         run_attribution(args, attr_parser)
-    if args.command == "start-server" or args.server:
+        if args.server:
+            run_server(args)
+    elif args.command == "start-server":
         run_server(args)
 
 

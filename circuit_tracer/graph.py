@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
+import logging
 import warnings
+from typing import NamedTuple
 
 import torch
 
-from circuit_tracer.utils.tl_nnsight_mapping import (
-    convert_nnsight_config_to_transformerlens,
-    UnifiedConfig,
-)
-from circuit_tracer.utils import get_default_device
 from circuit_tracer.attribution.targets import LogitTarget
+from circuit_tracer.utils import get_default_device
+from circuit_tracer.utils.tl_nnsight_mapping import (
+    UnifiedConfig,
+    convert_nnsight_config_to_transformerlens,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class Graph:
@@ -35,7 +38,7 @@ class Graph:
         input_tokens: torch.Tensor,
         active_features: torch.Tensor,
         adjacency_matrix: torch.Tensor,
-        cfg,
+        cfg: UnifiedConfig,
         selected_features: torch.Tensor,
         activation_values: torch.Tensor,
         logit_targets: list[LogitTarget],
@@ -84,16 +87,18 @@ class Graph:
         self.active_features = active_features
         self.input_tokens = input_tokens
         if scan is None:
-            print("Graph loaded without scan to identify it. Uploading will not be possible.")
+            logger.warning(
+                "Graph loaded without scan to identify it. Uploading will not be possible."
+            )
         self.scan = scan
         self.selected_features = selected_features
         self.activation_values = activation_values
 
-    def to(self, device):
+    def to(self, device: str | torch.device):
         """Send all relevant tensors to the device (cpu, cuda, etc.)
 
         Args:
-            device (_type_): device to send tensors
+            device: Target device for tensors.
         """
         self.adjacency_matrix = self.adjacency_matrix.to(device)
         self.active_features = self.active_features.to(device)
@@ -154,7 +159,7 @@ class Graph:
         torch.save(d, path)
 
     @staticmethod
-    def from_pt(path: str, map_location="cpu") -> "Graph":
+    def from_pt(path: str, map_location="cpu") -> Graph:
         """Load a graph (saved using graph.to_pt) from a .pt file at the given path.
 
         Handles backward compatibility with older serialized graphs that stored

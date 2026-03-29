@@ -9,7 +9,6 @@ import numpy as np
 import torch
 from einops import einsum
 
-
 if TYPE_CHECKING:
     from circuit_tracer.replacement_model.replacement_model_nnsight import (
         NNSightReplacementModel,

@@ -3,11 +3,8 @@ import gc
 import pytest
 import torch
 
+from circuit_tracer.attribution.attribute import attribute
 from circuit_tracer.replacement_model import ReplacementModel
-from circuit_tracer.attribution.attribute_nnsight import attribute as attribute_nnsight
-from circuit_tracer.attribution.attribute_transformerlens import (
-    attribute as attribute_transformerlens,
-)
 from tests.conftest import has_32gb
 
 # Mark all tests in this module as requiring 32GB+ VRAM
@@ -94,9 +91,9 @@ def test_attribution_graph_consistency(models, test_string):
     model_nnsight, model_tl = models
 
     with model_nnsight.zero_softcap():
-        graph_nnsight = attribute_nnsight(test_string, model_nnsight, verbose=False)
+        graph_nnsight = attribute(test_string, model_nnsight, verbose=False)
     with model_tl.zero_softcap():
-        graph_tl = attribute_transformerlens(test_string, model_tl, verbose=False)
+        graph_tl = attribute(test_string, model_tl, verbose=False)
 
     # Check active features match
     assert (graph_nnsight.active_features == graph_tl.active_features).all(), (

@@ -1,0 +1,14 @@
+include LICENSE
+include README.md
+include CHANGELOG.md
+include pyproject.toml
+
+# Frontend assets for visualization server
+recursive-include circuit_tracer/frontend/assets *.html *.css *.js *.json *.svg
+
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .pytest_cache
+global-exclude .ruff_cache
+prune .venv
+prune dist

@@ -1,197 +1,214 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 
-@dataclass
-class TransformerLens_NNSight_Mapping:
-    """Mapping specifying important locations in NNSight models, as well as mapping from TL Hook Points to NNSight locations"""
+@dataclass(frozen=True)
+class ModelMapping:
+    """Mapping specifying important locations in NNSight models and the correspondence
+    between TransformerLens hook points and NNSight envoy locations."""
 
-    model_architecture: str  # HuggingFace model architecture
-    attention_location_pattern: str  # Location of the attention patterns
-    layernorm_scale_location_patterns: list[str]  # Location of the Layernorm denominators
-    pre_logit_location: str  # Location immediately before the logits (the location from which we will attribute for logit tokens)
-    embed_location: str  # Location of the embedding Module (the location to which we will attribute for embeddings)
-    embed_weight: str  # Location of the embedding weight matrix
-    unembed_weight: str  # Location of the unembedding weight matrix
-    feature_hook_mapping: dict[
-        str, tuple[str, Literal["input", "output"]]
-    ]  # Mapping from (TransformerLens Hook) to a tuple representing an NNSight Envoy location, and whether we want its input or output
+    model_architecture: str
+    attention_location_pattern: str
+    layernorm_scale_location_patterns: list[str]
+    pre_logit_location: str
+    embed_location: str
+    embed_weight: str
+    unembed_weight: str
+    feature_hook_mapping: dict[str, tuple[str, Literal["input", "output"]]] = field(
+        default_factory=dict
+    )
 
 
-# Create an instance with the original configuration values
-gemma_2_mapping = TransformerLens_NNSight_Mapping(
-    model_architecture="Gemma2ForCausalLM",
-    attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
-    layernorm_scale_location_patterns=[
-        "model.layers[{layer}].input_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].post_attention_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].post_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.norm.source.self__norm_0.source.torch_rsqrt_0",
-    ],
-    pre_logit_location="model",
-    embed_location="model.embed_tokens",
-    embed_weight="model.embed_tokens.weight",
-    unembed_weight="lm_head.weight",
-    feature_hook_mapping={
-        "ln2.hook_normalized": (
-            "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0",
-            "output",
-        ),
-        "hook_resid_mid": ("model.layers[{layer}].pre_feedforward_layernorm", "input"),
-        "hook_mlp_out": ("model.layers[{layer}].post_feedforward_layernorm", "output"),
-    },
+# ── Model mapping registry ───────────────────────────────────────────
+# Each entry maps a HuggingFace architecture class name to its NNSight
+# location patterns.  New architectures can be added by appending here.
+
+_REGISTRY: dict[str, ModelMapping] = {}
+
+
+def _register(mapping: ModelMapping) -> ModelMapping:
+    """Register a mapping in the global registry and return it."""
+    _REGISTRY[mapping.model_architecture] = mapping
+    return mapping
+
+
+_register(
+    ModelMapping(
+        model_architecture="Gemma2ForCausalLM",
+        attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
+        layernorm_scale_location_patterns=[
+            "model.layers[{layer}].input_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].post_attention_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].post_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.norm.source.self__norm_0.source.torch_rsqrt_0",
+        ],
+        pre_logit_location="model",
+        embed_location="model.embed_tokens",
+        embed_weight="model.embed_tokens.weight",
+        unembed_weight="lm_head.weight",
+        feature_hook_mapping={
+            "ln2.hook_normalized": (
+                "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0",
+                "output",
+            ),
+            "hook_resid_mid": ("model.layers[{layer}].pre_feedforward_layernorm", "input"),
+            "hook_mlp_out": ("model.layers[{layer}].post_feedforward_layernorm", "output"),
+        },
+    )
 )
 
-# Create an instance with the original configuration values
-gemma_3_mapping = TransformerLens_NNSight_Mapping(
-    model_architecture="Gemma3ForCausalLM",
-    attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
-    layernorm_scale_location_patterns=[
-        "model.layers[{layer}].input_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].self_attn.q_norm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].self_attn.k_norm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].post_attention_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.layers[{layer}].post_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "model.norm.source.self__norm_0.source.torch_rsqrt_0",
-    ],
-    pre_logit_location="model",
-    embed_location="model.embed_tokens",
-    embed_weight="model.embed_tokens.weight",
-    unembed_weight="lm_head.weight",
-    feature_hook_mapping={
-        "ln2.hook_normalized": (
-            "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0",
-            "output",
-        ),
-        "hook_resid_mid": ("model.layers[{layer}].pre_feedforward_layernorm", "input"),
-        "mlp.hook_in": ("model.layers[{layer}].pre_feedforward_layernorm", "output"),
-        "hook_mlp_out": ("model.layers[{layer}].post_feedforward_layernorm", "output"),
-    },
+_register(
+    ModelMapping(
+        model_architecture="Gemma3ForCausalLM",
+        attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
+        layernorm_scale_location_patterns=[
+            "model.layers[{layer}].input_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].self_attn.q_norm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].self_attn.k_norm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].post_attention_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.layers[{layer}].post_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "model.norm.source.self__norm_0.source.torch_rsqrt_0",
+        ],
+        pre_logit_location="model",
+        embed_location="model.embed_tokens",
+        embed_weight="model.embed_tokens.weight",
+        unembed_weight="lm_head.weight",
+        feature_hook_mapping={
+            "ln2.hook_normalized": (
+                "model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0",
+                "output",
+            ),
+            "hook_resid_mid": ("model.layers[{layer}].pre_feedforward_layernorm", "input"),
+            "mlp.hook_in": ("model.layers[{layer}].pre_feedforward_layernorm", "output"),
+            "hook_mlp_out": ("model.layers[{layer}].post_feedforward_layernorm", "output"),
+        },
+    )
 )
 
-gemma_3_conditional_mapping = TransformerLens_NNSight_Mapping(
-    model_architecture="Gemma3ForConditionalGeneration",
-    attention_location_pattern="language_model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
-    layernorm_scale_location_patterns=[
-        "language_model.layers[{layer}].input_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "language_model.layers[{layer}].self_attn.q_norm.source.self__norm_0.source.torch_rsqrt_0",
-        "language_model.layers[{layer}].self_attn.k_norm.source.self__norm_0.source.torch_rsqrt_0",
-        "language_model.layers[{layer}].post_attention_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "language_model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "language_model.layers[{layer}].post_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
-        "language_model.norm.source.self__norm_0.source.torch_rsqrt_0",
-    ],
-    pre_logit_location="language_model",
-    embed_location="language_model.embed_tokens",
-    embed_weight="language_model.embed_tokens.weight",
-    unembed_weight="lm_head.weight",
-    feature_hook_mapping={
-        "ln2.hook_normalized": (
-            "language_model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0",
-            "output",
-        ),
-        "hook_resid_mid": ("language_model.layers[{layer}].pre_feedforward_layernorm", "input"),
-        "mlp.hook_in": ("language_model.layers[{layer}].pre_feedforward_layernorm", "output"),
-        "hook_mlp_out": ("language_model.layers[{layer}].post_feedforward_layernorm", "output"),
-    },
+_register(
+    ModelMapping(
+        model_architecture="Gemma3ForConditionalGeneration",
+        attention_location_pattern="language_model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
+        layernorm_scale_location_patterns=[
+            "language_model.layers[{layer}].input_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "language_model.layers[{layer}].self_attn.q_norm.source.self__norm_0.source.torch_rsqrt_0",
+            "language_model.layers[{layer}].self_attn.k_norm.source.self__norm_0.source.torch_rsqrt_0",
+            "language_model.layers[{layer}].post_attention_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "language_model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "language_model.layers[{layer}].post_feedforward_layernorm.source.self__norm_0.source.torch_rsqrt_0",
+            "language_model.norm.source.self__norm_0.source.torch_rsqrt_0",
+        ],
+        pre_logit_location="language_model",
+        embed_location="language_model.embed_tokens",
+        embed_weight="language_model.embed_tokens.weight",
+        unembed_weight="lm_head.weight",
+        feature_hook_mapping={
+            "ln2.hook_normalized": (
+                "language_model.layers[{layer}].pre_feedforward_layernorm.source.self__norm_0",
+                "output",
+            ),
+            "hook_resid_mid": ("language_model.layers[{layer}].pre_feedforward_layernorm", "input"),
+            "mlp.hook_in": ("language_model.layers[{layer}].pre_feedforward_layernorm", "output"),
+            "hook_mlp_out": ("language_model.layers[{layer}].post_feedforward_layernorm", "output"),
+        },
+    )
 )
 
-# Create an instance with the original configuration values
-llama_3_mapping = TransformerLens_NNSight_Mapping(
-    model_architecture="LlamaForCausalLM",
-    attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
-    layernorm_scale_location_patterns=[
-        "model.layers[{layer}].input_layernorm.source.mean_0",
-        "model.layers[{layer}].post_attention_layernorm.source.mean_0",
-        "model.norm.source.mean_0",
-    ],
-    pre_logit_location="model",
-    embed_location="model.embed_tokens",
-    embed_weight="model.embed_tokens.weight",
-    unembed_weight="lm_head.weight",
-    feature_hook_mapping={
-        "hook_resid_mid": ("model.layers[{layer}].post_attention_layernorm", "input"),
-        "hook_mlp_out": ("model.layers[{layer}].mlp", "output"),
-        "mlp.hook_in": ("model.layers[{layer}].post_attention_layernorm", "output"),
-        "mlp.hook_out": ("model.layers[{layer}].mlp", "output"),
-    },
+_register(
+    ModelMapping(
+        model_architecture="LlamaForCausalLM",
+        attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
+        layernorm_scale_location_patterns=[
+            "model.layers[{layer}].input_layernorm.source.mean_0",
+            "model.layers[{layer}].post_attention_layernorm.source.mean_0",
+            "model.norm.source.mean_0",
+        ],
+        pre_logit_location="model",
+        embed_location="model.embed_tokens",
+        embed_weight="model.embed_tokens.weight",
+        unembed_weight="lm_head.weight",
+        feature_hook_mapping={
+            "hook_resid_mid": ("model.layers[{layer}].post_attention_layernorm", "input"),
+            "hook_mlp_out": ("model.layers[{layer}].mlp", "output"),
+            "mlp.hook_in": ("model.layers[{layer}].post_attention_layernorm", "output"),
+            "mlp.hook_out": ("model.layers[{layer}].mlp", "output"),
+        },
+    )
 )
 
-# Create an instance with the original configuration values
-qwen_3_mapping = TransformerLens_NNSight_Mapping(
-    model_architecture="Qwen3ForCausalLM",
-    attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
-    layernorm_scale_location_patterns=[
-        "model.layers[{layer}].input_layernorm.source.mean_0",
-        "model.layers[{layer}].post_attention_layernorm.source.mean_0",
-        "model.norm.source.mean_0",
-    ],
-    pre_logit_location="model",
-    embed_location="model.embed_tokens",
-    embed_weight="model.embed_tokens.weight",
-    unembed_weight="lm_head.weight",
-    feature_hook_mapping={
-        "mlp.hook_in": ("model.layers[{layer}].post_attention_layernorm", "output"),
-        "mlp.hook_out": ("model.layers[{layer}].mlp", "output"),
-    },
+_register(
+    ModelMapping(
+        model_architecture="Qwen3ForCausalLM",
+        attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
+        layernorm_scale_location_patterns=[
+            "model.layers[{layer}].input_layernorm.source.mean_0",
+            "model.layers[{layer}].post_attention_layernorm.source.mean_0",
+            "model.norm.source.mean_0",
+        ],
+        pre_logit_location="model",
+        embed_location="model.embed_tokens",
+        embed_weight="model.embed_tokens.weight",
+        unembed_weight="lm_head.weight",
+        feature_hook_mapping={
+            "mlp.hook_in": ("model.layers[{layer}].post_attention_layernorm", "output"),
+            "mlp.hook_out": ("model.layers[{layer}].mlp", "output"),
+        },
+    )
+)
+
+_register(
+    ModelMapping(
+        model_architecture="GptOssForCausalLM",
+        attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
+        layernorm_scale_location_patterns=[
+            "model.layers[{layer}].input_layernorm.source.mean_0",
+            "model.layers[{layer}].post_attention_layernorm.source.mean_0",
+            "model.norm.source.mean_0",
+        ],
+        pre_logit_location="model",
+        embed_location="model.embed_tokens",
+        embed_weight="model.embed_tokens.weight",
+        unembed_weight="lm_head.weight",
+        feature_hook_mapping={
+            "hook_resid_mid": ("model.layers[{layer}].post_attention_layernorm", "input"),
+            "mlp.hook_in": ("model.layers[{layer}].post_attention_layernorm", "output"),
+            "mlp.hook_out": ("model.layers[{layer}].mlp.source.self_experts_0", "output"),
+            "hook_mlp_out": ("model.layers[{layer}].mlp.source.self_experts_0", "output"),
+        },
+    )
 )
 
 
-gpt_oss_mapping = TransformerLens_NNSight_Mapping(
-    model_architecture="GptOssForCausalLM",
-    attention_location_pattern="model.layers[{layer}].self_attn.source.attention_interface_0.source.nn_functional_dropout_0",
-    layernorm_scale_location_patterns=[
-        "model.layers[{layer}].input_layernorm.source.mean_0",
-        "model.layers[{layer}].post_attention_layernorm.source.mean_0",
-        "model.norm.source.mean_0",
-    ],
-    pre_logit_location="model",
-    embed_location="model.embed_tokens",
-    embed_weight="model.embed_tokens.weight",
-    unembed_weight="lm_head.weight",
-    feature_hook_mapping={
-        "hook_resid_mid": ("model.layers[{layer}].post_attention_layernorm", "input"),
-        "mlp.hook_in": ("model.layers[{layer}].post_attention_layernorm", "output"),
-        "mlp.hook_out": ("model.layers[{layer}].mlp.source.self_experts_0", "output"),
-        "hook_mlp_out": ("model.layers[{layer}].mlp.source.self_experts_0", "output"),
-    },
-)
-
-
-def get_mapping(model_architecture: str) -> TransformerLens_NNSight_Mapping:
-    """Get the TransformerLens-NNSight mapping for a given model architecture.
+def get_mapping(model_architecture: str) -> ModelMapping:
+    """Get the NNSight mapping for a given model architecture.
 
     Args:
-        model_architecture: The model architecture name (e.g., 'Gemma2ForCausalLM', 'Llama2ForCausalLM')
+        model_architecture: The HuggingFace model architecture class name
+            (e.g. ``'Gemma2ForCausalLM'``).
 
     Returns:
-        TransformerLens_NNSight_Mapping: The mapping configuration for the specified architecture
+        The mapping configuration for the specified architecture.
 
     Raises:
-        ValueError: If the model architecture is not supported
+        ValueError: If the model architecture is not supported.
     """
-    mappings = {
-        mapping.model_architecture: mapping
-        for mapping in [
-            gemma_2_mapping,
-            gemma_3_mapping,
-            gemma_3_conditional_mapping,
-            llama_3_mapping,
-            qwen_3_mapping,
-            gpt_oss_mapping,
-        ]
-    }
-
-    if model_architecture not in mappings:
-        supported_architectures = list(mappings.keys())
+    if model_architecture not in _REGISTRY:
         raise ValueError(
-            f"Unsupported model architecture: {model_architecture}. "
-            f"Supported architectures: {supported_architectures}"
+            f"Unsupported model architecture: {model_architecture}. Supported: {list(_REGISTRY)}"
         )
+    return _REGISTRY[model_architecture]
 
-    return mappings[model_architecture]
+
+def get_supported_architectures() -> list[str]:
+    """Return the list of supported model architecture names."""
+    return list(_REGISTRY)
+
+
+# ── Unified config ────────────────────────────────────────────────────
 
 
 @dataclass
@@ -217,7 +234,7 @@ class UnifiedConfig:
         return {k: v for k, v in self.__dict__.items() if v is not None}
 
     @classmethod
-    def from_dict(cls, config_dict: dict[str, Any]) -> "UnifiedConfig":
+    def from_dict(cls, config_dict: dict[str, Any]) -> UnifiedConfig:
         """Create from dictionary."""
         return cls(
             n_layers=config_dict["n_layers"],
@@ -234,31 +251,25 @@ class UnifiedConfig:
         )
 
 
-def convert_nnsight_config_to_transformerlens(config):
-    """Convert NNsight config to TransformerLens config format.
+def convert_nnsight_config_to_transformerlens(config: Any) -> UnifiedConfig:
+    """Convert an NNsight or HuggingFace config to a ``UnifiedConfig``.
 
-    Args:
-        config: NNsight config object
-        return_unified: If True, return UnifiedConfig instead of HookedTransformerConfig
+    If *config* is already a ``UnifiedConfig`` it is returned unchanged.
     """
-    # If already a UnifiedConfig, return as-is
     if isinstance(config, UnifiedConfig):
         return config
 
     field_mappings = {
-        # Basic model dimensions
         "num_hidden_layers": "n_layers",
         "hidden_size": "d_model",
         "head_dim": "d_head",
         "num_attention_heads": "n_heads",
         "intermediate_size": "d_mlp",
         "vocab_size": "d_vocab",
-        # Attention parameters
         "num_key_value_heads": "n_key_value_heads",
-        # Model metadata
         "torch_dtype": "dtype",
     }
-    config_dict = config.to_dict()
+    config_dict: dict[str, Any] = config.to_dict()
 
     if "original_architecture" not in config_dict:
         config_dict["original_architecture"] = config.architectures[0]
@@ -275,3 +286,7 @@ def convert_nnsight_config_to_transformerlens(config):
             config_dict[transformerlens_field] = config_dict[nnsight_field]
 
     return UnifiedConfig.from_dict(config_dict)
+
+
+# Backward-compatible alias
+TransformerLens_NNSight_Mapping = ModelMapping

@@ -7,7 +7,7 @@ import torch.nn as nn
 from transformer_lens import HookedTransformerConfig
 
 from circuit_tracer import ReplacementModel
-from circuit_tracer.attribution.attribute_transformerlens import attribute
+from circuit_tracer.attribution.attribute import attribute
 from circuit_tracer.replacement_model.replacement_model_transformerlens import (
     TransformerLensReplacementModel,
 )

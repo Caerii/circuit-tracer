@@ -1,6 +1,11 @@
 from pydantic import BaseModel
 
 
+def _cantor_pairing(x: int, y: int) -> int:
+    """Unique integer encoding of two non-negative integers (Cantor pairing function)."""
+    return (x + y) * (x + y + 1) // 2 + y
+
+
 class Metadata(BaseModel):
     slug: str
     scan: str
@@ -42,14 +47,10 @@ class Node(BaseModel):
     @classmethod
     def feature_node(cls, layer, pos, feat_idx, influence=None, activation=None):
         """Create a feature node."""
-
-        def cantor_pairing(x, y):
-            return (x + y) * (x + y + 1) // 2 + y
-
         reverse_ctx_idx = 0
         return cls(
             node_id=f"{layer}_{feat_idx}_{pos}",
-            feature=cantor_pairing(layer, feat_idx),
+            feature=_cantor_pairing(layer, feat_idx),
             layer=str(layer),
             ctx_idx=pos,
             feature_type="cross layer transcoder",

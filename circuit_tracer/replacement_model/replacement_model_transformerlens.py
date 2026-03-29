@@ -1,9 +1,8 @@
-import warnings
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from functools import partial
-from typing import Callable, Literal
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -12,18 +11,17 @@ from transformer_lens import HookedTransformer, HookedTransformerConfig
 from transformer_lens.hook_points import HookPoint
 
 from circuit_tracer.attribution.context_transformerlens import AttributionContext
+from circuit_tracer.replacement_model.common import (
+    Intervention,
+    convert_open_ended_interventions,
+)
+from circuit_tracer.replacement_model.common import (
+    ensure_tokenized as _ensure_tokenized,
+)
 from circuit_tracer.transcoder import TranscoderSet
 from circuit_tracer.transcoder.cross_layer_transcoder import CrossLayerTranscoder
 from circuit_tracer.utils import get_default_device
 from circuit_tracer.utils.hf_utils import load_transcoder_from_hub
-
-# Type definition for an intervention tuple (layer, position, feature_idx, value)
-Intervention = tuple[
-    int | torch.Tensor,
-    int | slice | torch.Tensor,
-    int | torch.Tensor,
-    int | float | torch.Tensor,
-]
 
 
 class ReplacementMLP(nn.Module):
@@ -349,77 +347,49 @@ class TransformerLensReplacementModel(HookedTransformer):
         finally:
             self.cfg.output_logits_soft_cap = current_softcap
 
+    # ── Unified attribution interface ──────────────────────────────────
+    # These properties/methods allow the unified _run_attribution in
+    # attribute.py to work identically across both backends.
+
+    @property
+    def unembed_proj(self) -> torch.Tensor:
+        """Unembedding matrix, backend-agnostic accessor."""
+        return self.unembed.W_U  # type: ignore[return-value]
+
+    @property
+    def model_config(self):
+        """Model configuration object, backend-agnostic accessor."""
+        return self.cfg
+
+    def run_forward_pass(self, input_ids: torch.Tensor, batch_size: int, ctx) -> None:
+        """Execute the forward pass and cache residual activations."""
+        with ctx.install_hooks(self):
+            residual = self.forward(  # type: ignore[call-overload]
+                input_ids.expand(batch_size, -1), stop_at_layer=self.cfg.n_layers
+            )
+            ctx._resid_activations[-1] = self.ln_final(residual)
+
+    def _transcoders_as_list(self) -> list:
+        """Wrap transcoders in a list, handling both iterable TranscoderSet and single CLT."""
+        if hasattr(self.transcoders, "__iter__"):
+            return list(self.transcoders)  # type: ignore[arg-type]
+        return [self.transcoders]
+
+    def get_offload_targets_phase0(self) -> list:
+        """Modules to offload after precomputation (Phase 0)."""
+        return self._transcoders_as_list()
+
+    def get_offload_targets_phase1(self) -> list:
+        """Modules to offload after forward pass (Phase 1)."""
+        return [block.mlp for block in self.blocks]
+
+    def get_offload_targets_phase2(self) -> list:
+        """Modules to offload after building input vectors (Phase 2)."""
+        return [self.unembed, self.embed]
+
     def ensure_tokenized(self, prompt: str | torch.Tensor | list[int]) -> torch.Tensor:
-        """Convert prompt to 1-D tensor of token ids with proper special token handling.
-
-        This method ensures that a special token (BOS/PAD) is prepended to the input sequence.
-        The first token position in transformer models typically exhibits unusually high norm
-        and an excessive number of active features due to how models process the beginning of
-        sequences. By prepending a special token, we ensure that actual content tokens have
-        more consistent and interpretable feature activations, avoiding the artifacts present
-        at position 0. This prepended token is later ignored during attribution analysis.
-
-        Args:
-            prompt: String, tensor, or list of token ids representing a single sequence
-
-        Returns:
-            1-D tensor of token ids with BOS/PAD token at the beginning
-
-        Raises:
-            TypeError: If prompt is not str, tensor, or list
-            ValueError: If tensor has wrong shape (must be 1-D or 2-D with batch size 1)
-        """
-
-        if isinstance(prompt, str):
-            tokens = self.tokenizer(
-                prompt, return_tensors="pt", add_special_tokens=False
-            ).input_ids.squeeze(0)  # type: ignore
-        elif isinstance(prompt, torch.Tensor):
-            tokens = prompt.squeeze()
-        elif isinstance(prompt, list):
-            tokens = torch.tensor(prompt, dtype=torch.long).squeeze()
-        else:
-            raise TypeError(f"Unsupported prompt type: {type(prompt)}")
-
-        if tokens.ndim > 1:
-            raise ValueError(f"Tensor must be 1-D, got shape {tokens.shape}")
-
-        tokens = tokens.to(self.cfg.device)
-
-        gemma_3_it = "gemma-3" in self.cfg.model_name and self.cfg.model_name.endswith("-it")
-        if gemma_3_it:
-            ignore_prefix = torch.tensor(
-                [2, 105, 2364, 107], dtype=tokens.dtype, device=tokens.device
-            )
-            tokenization_error = (
-                "Input tokens should start with <bos><start_of_turn>user\n, but got {tokens}"
-            )
-            assert tokens.size(0) >= 4 and torch.all(tokens[:4] == ignore_prefix), (
-                tokenization_error.format(tokens=self.tokenizer.decode(tokens.cpu().tolist()))  # type: ignore
-            )
-            return tokens
-
-        # Check if a special token is already present at the beginning
-        if tokens[0] in self.tokenizer.all_special_ids:  # type: ignore
-            return tokens
-
-        # Prepend a special token to avoid artifacts at position 0
-        candidate_bos_token_ids = [
-            self.tokenizer.bos_token_id,  # type: ignore
-            self.tokenizer.pad_token_id,  # type: ignore
-            self.tokenizer.eos_token_id,  # type: ignore
-        ]
-        candidate_bos_token_ids += self.tokenizer.all_special_ids  # type: ignore
-
-        dummy_bos_token_id = next(filter(None, candidate_bos_token_ids))
-        if dummy_bos_token_id is None:
-            warnings.warn(
-                "No suitable special token found for BOS token replacement. The first token will be ignored."
-            )
-        else:
-            tokens = torch.cat([torch.tensor([dummy_bos_token_id], device=tokens.device), tokens])
-
-        return tokens.to(self.cfg.device)
+        """Convert prompt to 1-D tensor of token ids with proper special token handling."""
+        return _ensure_tokenized(prompt, self.tokenizer, self.cfg.device, self.cfg.model_name)
 
     @torch.no_grad()
     def setup_attribution(self, inputs: str | torch.Tensor):
@@ -717,7 +687,7 @@ class TransformerLensReplacementModel(HookedTransformer):
         ]
 
         all_hooks = freeze_hooks + activation_hooks + delta_hooks + intervention_hooks
-        cached_logits = [] if using_past_kv_cache else [None]
+        cached_logits: list[torch.Tensor | None] = [] if using_past_kv_cache else [None]
 
         def logit_cache_hook(activations, hook):
             # we need to manually apply the softcap (if used by the model), as it comes post-hook
@@ -795,19 +765,8 @@ class TransformerLensReplacementModel(HookedTransformer):
         self,
         interventions: Sequence[Intervention],
     ) -> list[Intervention]:
-        """Convert open-ended interventions into position-0 equivalents.
-
-        An intervention is *open-ended* if its position component is a ``slice`` whose
-        ``stop`` attribute is ``None`` (e.g. ``slice(1, None)``). Such interventions will
-        also apply to tokens generated in an open-ended generation loop. In such cases,
-        when use_past_kv_cache=True, the model only runs the most recent token
-        (and there is thus only 1 position).
-        """
-        converted = []
-        for layer, pos, feature_idx, value in interventions:
-            if isinstance(pos, slice) and pos.stop is None:
-                converted.append((layer, 0, feature_idx, value))
-        return converted
+        """Convert open-ended interventions into position-0 equivalents."""
+        return convert_open_ended_interventions(interventions)
 
     @torch.no_grad
     def feature_intervention_generate(

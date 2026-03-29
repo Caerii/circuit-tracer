@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import torch
 from safetensors import safe_open
-from safetensors.torch import save_file, load_file
+from safetensors.torch import load_file, save_file
 from torch.nn import functional as F
 
 from circuit_tracer.transcoder.activation_functions import JumpReLU

@@ -1,37 +1,35 @@
-import warnings
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from functools import partial
-from typing import Callable, Iterator, Literal, cast
+from typing import Literal, cast
 
 import torch
+from nnsight import CONFIG as NNSIGHT_CONFIG
+from nnsight import Envoy, LanguageModel, save
+from nnsight.intervention.tracing.tracer import Barrier
 from torch import nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from nnsight.intervention.tracing.tracer import Barrier
-from nnsight import LanguageModel, Envoy, save, CONFIG as NNSIGHT_CONFIG
 
 from circuit_tracer.attribution.context_nnsight import AttributionContext
+from circuit_tracer.replacement_model.common import (
+    Intervention,
+    convert_open_ended_interventions,
+)
+from circuit_tracer.replacement_model.common import (
+    ensure_tokenized as _ensure_tokenized,
+)
 from circuit_tracer.transcoder import TranscoderSet
 from circuit_tracer.transcoder.cross_layer_transcoder import CrossLayerTranscoder
 from circuit_tracer.utils import get_default_device
 from circuit_tracer.utils.hf_utils import load_transcoder_from_hub
 from circuit_tracer.utils.tl_nnsight_mapping import (
-    get_mapping,
     convert_nnsight_config_to_transformerlens,
+    get_mapping,
 )
 
 NNSIGHT_CONFIG.APP.PYMOUNT = False
 NNSIGHT_CONFIG.APP.CROSS_INVOKER = False
-NNSIGHT_CONFIG.APP.TRACE_CACHING = True
-
-# Type definition for an intervention tuple (layer, position, feature_idx, value)
-Intervention = tuple[
-    int | torch.Tensor,
-    int | slice | torch.Tensor,
-    int | torch.Tensor,
-    int | float | torch.Tensor,
-]
 
 
 class EnvoyWrapper:
@@ -405,77 +403,65 @@ class NNSightReplacementModel(LanguageModel):
         else:
             yield
 
+    # ── Unified attribution interface ──────────────────────────────────
+    # These properties/methods allow the unified _run_attribution in
+    # attribute.py to work identically across both backends.
+
+    @property
+    def unembed_proj(self) -> torch.Tensor:
+        """Unembedding matrix, backend-agnostic accessor."""
+        return cast(torch.Tensor, self.unembed_weight)
+
+    @property
+    def model_config(self):
+        """Model configuration object, backend-agnostic accessor."""
+        return self.config
+
+    def run_forward_pass(self, input_ids: torch.Tensor, batch_size: int, ctx) -> None:
+        """Execute the forward pass and cache residual activations."""
+        with self.trace() as tracer:
+            with tracer.invoke(input_ids.expand(batch_size, -1)):
+                pass
+
+            detach_barrier = tracer.barrier(2)
+
+            self.configure_gradient_flow(tracer)
+            self.configure_skip_connection(tracer, barrier=detach_barrier)
+            ctx.cache_residual(self, tracer, barrier=detach_barrier)
+
+    def _transcoders_as_list(self) -> list:
+        """Wrap transcoders in a list, handling both iterable TranscoderSet and single CLT."""
+        if hasattr(self.transcoders, "__iter__"):
+            return list(self.transcoders)  # type: ignore[arg-type]
+        return [self.transcoders]
+
+    def get_offload_targets_phase0(self) -> list:
+        """Modules to offload after precomputation (Phase 0)."""
+        if not self.skip_transcoder:
+            return self._transcoders_as_list()
+        return []
+
+    def get_offload_targets_phase1(self) -> list:
+        """Modules to offload after forward pass (Phase 1)."""
+        targets = [layer.mlp for layer in getattr(self.pre_logit_location, "layers")]
+        if self.skip_transcoder:
+            targets += self._transcoders_as_list()
+        return targets
+
+    def get_offload_targets_phase2(self) -> list:
+        """Modules to offload after building input vectors (Phase 2)."""
+        targets = [self.embed_location]
+        tied_embeds = (
+            self.embed_weight.untyped_storage().data_ptr()  # type:ignore
+            == self.unembed_weight.untyped_storage().data_ptr()  # type:ignore
+        )
+        if not tied_embeds:
+            targets.append(self.lm_head)
+        return targets
+
     def ensure_tokenized(self, prompt: str | torch.Tensor | list[int]) -> torch.Tensor:
-        """Convert prompt to 1-D tensor of token ids with proper special token handling.
-
-        This method ensures that a special token (BOS/PAD) is prepended to the input sequence.
-        The first token position in transformer models typically exhibits unusually high norm
-        and an excessive number of active features due to how models process the beginning of
-        sequences. By prepending a special token, we ensure that actual content tokens have
-        more consistent and interpretable feature activations, avoiding the artifacts present
-        at position 0. This prepended token is later ignored during attribution analysis.
-
-        Args:
-            prompt: String, tensor, or list of token ids representing a single sequence
-
-        Returns:
-            1-D tensor of token ids with BOS/PAD token at the beginning
-
-        Raises:
-            TypeError: If prompt is not str, tensor, or list
-            ValueError: If tensor has wrong shape (must be 1-D or 2-D with batch size 1)
-        """
-
-        if isinstance(prompt, str):
-            tokens = self.tokenizer(
-                prompt, return_tensors="pt", add_special_tokens=False
-            ).input_ids.squeeze(0)
-        elif isinstance(prompt, torch.Tensor):
-            tokens = prompt.squeeze()
-        elif isinstance(prompt, list):
-            tokens = torch.tensor(prompt, dtype=torch.long).squeeze()
-        else:
-            raise TypeError(f"Unsupported prompt type: {type(prompt)}")
-
-        if tokens.ndim > 1:
-            raise ValueError(f"Tensor must be 1-D, got shape {tokens.shape}")
-
-        tokens = tokens.to(self.device)
-
-        gemma_3_it = "gemma-3" in self.cfg.model_name and self.cfg.model_name.endswith("-it")
-        if gemma_3_it:
-            ignore_prefix = torch.tensor(
-                [2, 105, 2364, 107], dtype=tokens.dtype, device=tokens.device
-            )
-            tokenization_error = (
-                "Input tokens should start with <bos><start_of_turn>user\n, but got {tokens}"
-            )
-            assert tokens.size(0) >= 4 and torch.all(tokens[:4] == ignore_prefix), (
-                tokenization_error.format(tokens=self.tokenizer.decode(tokens.cpu().tolist()))
-            )
-            return tokens
-
-        # Check if a special token is already present at the beginning
-        if tokens[0] in self.tokenizer.all_special_ids:
-            return tokens
-
-        # Prepend a special token to avoid artifacts at position 0
-        candidate_bos_token_ids = [
-            self.tokenizer.bos_token_id,
-            self.tokenizer.pad_token_id,
-            self.tokenizer.eos_token_id,
-        ]
-        candidate_bos_token_ids += self.tokenizer.all_special_ids
-
-        dummy_bos_token_id = next(filter(None, candidate_bos_token_ids))
-        if dummy_bos_token_id is None:
-            warnings.warn(
-                "No suitable special token found for BOS token replacement. The first token will be ignored."
-            )
-        else:
-            tokens = torch.cat([torch.tensor([dummy_bos_token_id], device=tokens.device), tokens])
-
-        return tokens.to(self.device)
+        """Convert prompt to 1-D tensor of token ids with proper special token handling."""
+        return _ensure_tokenized(prompt, self.tokenizer, self.device, self.cfg.model_name)
 
     @torch.no_grad()
     def setup_attribution(self, inputs: str | torch.Tensor):
@@ -824,20 +810,9 @@ class NNSightReplacementModel(LanguageModel):
     def _convert_open_ended_interventions(
         self,
         interventions: Sequence[Intervention],
-    ) -> Sequence[Intervention]:
-        """Convert open-ended interventions into position-0 equivalents.
-
-        An intervention is *open-ended* if its position component is a ``slice`` whose
-        ``stop`` attribute is ``None`` (e.g. ``slice(1, None)``). Such interventions will
-        also apply to tokens generated in an open-ended generation loop. In such cases,
-        when use_past_kv_cache=True, the model only runs the most recent token
-        (and there is thus only 1 position).
-        """
-        converted = []
-        for layer, pos, feature_idx, value in interventions:
-            if isinstance(pos, slice) and pos.stop is None:
-                converted.append((layer, 0, feature_idx, value))
-        return converted
+    ) -> list[Intervention]:
+        """Convert open-ended interventions into position-0 equivalents."""
+        return convert_open_ended_interventions(interventions)
 
     @torch.no_grad
     def feature_intervention_generate(

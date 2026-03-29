@@ -4,8 +4,8 @@ import gc
 from collections.abc import Sequence
 from typing import cast
 
-import torch
 import pytest
+import torch
 
 from circuit_tracer import Graph, ReplacementModel
 from circuit_tracer.attribution.attribute import attribute

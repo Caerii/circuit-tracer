@@ -3,14 +3,13 @@ from __future__ import annotations
 import logging
 import os
 import time
-
+from typing import TYPE_CHECKING
 
 import torch
 from transformers import AutoTokenizer
 
 from circuit_tracer.frontend.graph_models import Metadata, Model, Node, QParams
 from circuit_tracer.frontend.utils import add_graph_metadata
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from circuit_tracer.graph import Graph
