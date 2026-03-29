@@ -6,8 +6,50 @@ from typing import Any, Literal
 
 @dataclass(frozen=True)
 class ModelMapping:
-    """Mapping specifying important locations in NNSight models and the correspondence
-    between TransformerLens hook points and NNSight envoy locations."""
+    """Mapping between HuggingFace model internals and circuit-tracer hook points.
+
+    Each field specifies where to find key model components in NNSight's
+    traced computation graph.  Patterns containing ``{layer}`` are expanded
+    per-layer at runtime.
+
+    To add support for a new architecture, create a ``ModelMapping`` and
+    register it with :func:`register_model`::
+
+        from circuit_tracer import ModelMapping, register_model
+
+        register_model(ModelMapping(
+            model_architecture="MistralForCausalLM",
+            attention_location_pattern="model.layers[{layer}].self_attn...",
+            layernorm_scale_location_patterns=[...],
+            pre_logit_location="model",
+            embed_location="model.embed_tokens",
+            embed_weight="model.embed_tokens.weight",
+            unembed_weight="lm_head.weight",
+            feature_hook_mapping={
+                "hook_resid_mid": ("model.layers[{layer}].post_attention_layernorm", "input"),
+                "hook_mlp_out": ("model.layers[{layer}].mlp", "output"),
+            },
+        ))
+
+    See the existing Gemma-2 mapping below for a complete, annotated example.
+
+    Attributes:
+        model_architecture: Exact HuggingFace architecture class name
+            (e.g. ``"Gemma2ForCausalLM"``).  Must match
+            ``AutoConfig.from_pretrained(model).architectures[0]``.
+        attention_location_pattern: NNSight envoy path to the attention
+            dropout node, with ``{layer}`` placeholder.
+        layernorm_scale_location_patterns: Paths to each LayerNorm scale
+            operation that should be frozen during attribution.
+        pre_logit_location: Path to the module whose output is projected
+            to logits (usually ``"model"``).
+        embed_location: Path to the token embedding module.
+        embed_weight: Path to the embedding weight tensor.
+        unembed_weight: Path to the unembedding (lm_head) weight tensor.
+        feature_hook_mapping: Maps TransformerLens hook names to
+            ``(nnsight_path, "input"|"output")`` tuples, specifying where
+            transcoder features read from and write to.
+    """
 
     model_architecture: str
     attention_location_pattern: str
@@ -206,6 +248,55 @@ def get_mapping(model_architecture: str) -> ModelMapping:
 def get_supported_architectures() -> list[str]:
     """Return the list of supported model architecture names."""
     return list(_REGISTRY)
+
+
+def register_model(mapping: ModelMapping) -> None:
+    """Register a new model architecture for use with circuit-tracer.
+
+    This is the public extension point for adding support for model families
+    not yet included in the built-in registry.  After registration, the
+    architecture can be used with both the NNSight and TransformerLens backends.
+
+    Args:
+        mapping: A :class:`ModelMapping` describing the model's hook points.
+
+    Example::
+
+        from circuit_tracer import ModelMapping, register_model
+
+        register_model(ModelMapping(
+            model_architecture="MistralForCausalLM",
+            attention_location_pattern="model.layers[{layer}].self_attn...",
+            layernorm_scale_location_patterns=[...],
+            pre_logit_location="model",
+            embed_location="model.embed_tokens",
+            embed_weight="model.embed_tokens.weight",
+            unembed_weight="lm_head.weight",
+        ))
+    """
+    _register(mapping)
+
+
+def auto_detect_mapping(model_name: str) -> ModelMapping | None:
+    """Check whether a HuggingFace model is already supported.
+
+    Downloads the model config from the Hub (or cache) and looks up its
+    architecture class in the registry.
+
+    Args:
+        model_name: HuggingFace model identifier (e.g. ``"google/gemma-2-2b"``).
+
+    Returns:
+        The :class:`ModelMapping` if the architecture is registered,
+        or ``None`` if it is not yet supported.
+    """
+    from transformers import AutoConfig
+
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    architectures = getattr(config, "architectures", None)
+    if not architectures:
+        return None
+    return _REGISTRY.get(architectures[0])
 
 
 # ── Unified config ────────────────────────────────────────────────────

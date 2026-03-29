@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-03-28
+
+### Added
+
+- **Programmatic analysis API** (`circuit_tracer.analysis`): new module surfacing `get_top_features()`, `graph_to_interventions()`, `compare_graphs()`, `find_common_circuit()`, and `ComparisonResult` for programmatic circuit analysis workflows.
+- **Graph convenience methods**: `Graph.top_features()`, `Graph.prune()`, `Graph.scores()`, `Graph.to_json()` delegate to standalone analysis functions for discoverability.
+- **Batch attribution**: `attribute_batch()` runs attribution across multiple prompts, returning a list of graphs.
+- **Public intervention bridge**: `graph_to_interventions()` converts a graph's top features into `(layer, pos, feature_idx, value)` tuples ready for `model.feature_intervention()`.
+- **Model extensibility API**: `register_model()` and `auto_detect_mapping()` let users register new model architectures and check HuggingFace model support without reading source code.
+- **Expanded public exports**: `get_top_features`, `prune_graph`, `PruneResult`, `compute_graph_scores`, `CustomTarget`, `create_graph_files`, `Intervention`, `graph_to_interventions`, `attribute_batch`, `compare_graphs`, `find_common_circuit`, `ComparisonResult`, `ModelMapping`, `register_model`, `get_supported_architectures`, `auto_detect_mapping` — all importable from `circuit_tracer` directly.
+- **Enhanced `ModelMapping` docstring**: annotated example showing how to create a mapping for a new architecture.
+- New test suites: `test_analysis.py` (21 tests), `test_model_registry.py` (4 tests).
+
+### Changed
+
+- `get_top_features()` moved from `demo_utils.py` to `analysis.py` (canonical location); `demo_utils` imports it from there.
+
 ## [0.5.0] — 2026-03-28
 
 ### Added

@@ -5,7 +5,6 @@ import torch
 from IPython.display import HTML, display
 
 from circuit_tracer.attribution.targets import CustomTarget
-from circuit_tracer.graph import compute_node_influence
 from circuit_tracer.utils.decode_url_features import (
     Feature,
     decode_url_features,
@@ -37,46 +36,6 @@ def cleanup_cuda() -> None:
     """Run garbage collection and free CUDA cache."""
     gc.collect()
     torch.cuda.empty_cache()
-
-
-def get_top_features(graph, n: int = 10) -> tuple[list[tuple[int, int, int]], list[float]]:
-    """Extract the top-N feature nodes from the graph by total multi-hop influence.
-
-    Uses ``compute_node_influence`` to rank features by their total effect
-    on *all* logit targets (direct + indirect paths), weighted by each
-    target's probability.
-
-    Args:
-        graph: A Graph object with ``adjacency_matrix``, ``selected_features``,
-            ``active_features``, ``logit_targets``, and ``logit_probabilities``.
-        n: Number of top features to return.
-
-    Returns:
-        Tuple of (features, scores) where *features* is a list of
-        ``(layer, pos, feature_idx)`` tuples and *scores* is the
-        corresponding influence values.
-    """
-    n_logits = len(graph.logit_targets)
-    n_features = len(graph.selected_features)
-
-    # Build logit weight vector
-    logit_weights = torch.zeros(
-        graph.adjacency_matrix.shape[0], device=graph.adjacency_matrix.device
-    )
-    logit_weights[-n_logits:] = graph.logit_probabilities
-
-    # Multi-hop influence across all logit targets
-    node_influence = compute_node_influence(graph.adjacency_matrix, logit_weights)
-    feature_influence = node_influence[:n_features]
-
-    top_k = min(n, n_features)
-    top_values, top_indices = torch.topk(feature_influence, top_k)
-
-    features = [
-        tuple(graph.active_features[graph.selected_features[i]].tolist()) for i in top_indices
-    ]
-    scores = top_values.tolist()
-    return features, scores
 
 
 def display_top_features_comparison(

@@ -158,6 +158,63 @@ class Graph:
         }
         torch.save(d, path)
 
+    # ── Convenience methods (delegate to standalone functions) ───────
+
+    def top_features(self, n: int = 10) -> tuple[list[tuple[int, int, int]], list[float]]:
+        """Return the top-*n* features by multi-hop influence on the logits.
+
+        Shorthand for ``circuit_tracer.analysis.get_top_features(self, n)``.
+        See :func:`~circuit_tracer.analysis.get_top_features` for details.
+        """
+        from circuit_tracer.analysis import get_top_features
+
+        return get_top_features(self, n)
+
+    def prune(self, node_threshold: float = 0.8, edge_threshold: float = 0.98) -> PruneResult:
+        """Prune low-influence nodes and edges.
+
+        Shorthand for ``prune_graph(self, node_threshold, edge_threshold)``.
+        See :func:`prune_graph` for details.
+        """
+        return prune_graph(self, node_threshold, edge_threshold)
+
+    def scores(self) -> tuple[float, float]:
+        """Compute replacement and completeness scores.
+
+        Returns:
+            ``(replacement_score, completeness_score)`` — higher is better.
+            See :func:`compute_graph_scores` for details.
+        """
+        return compute_graph_scores(self)
+
+    def to_json(
+        self,
+        slug: str,
+        output_path: str,
+        *,
+        node_threshold: float = 0.8,
+        edge_threshold: float = 0.98,
+    ):
+        """Export the graph as a pruned JSON file for the visualization frontend.
+
+        Shorthand for ``create_graph_files(self, slug, output_path, ...)``.
+
+        Args:
+            slug: Short identifier for the graph (used as filename).
+            output_path: Directory to write the JSON file into.
+            node_threshold: Keep nodes with this fraction of total influence.
+            edge_threshold: Keep edges with this fraction of total influence.
+        """
+        from circuit_tracer.utils.create_graph_files import create_graph_files
+
+        create_graph_files(
+            self,
+            slug=slug,
+            output_path=output_path,
+            node_threshold=node_threshold,
+            edge_threshold=edge_threshold,
+        )
+
     @staticmethod
     def from_pt(path: str, map_location="cpu") -> Graph:
         """Load a graph (saved using graph.to_pt) from a .pt file at the given path.

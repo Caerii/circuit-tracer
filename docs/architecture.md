@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This document describes the internal architecture of `circuit-tracer` for contributors and advanced users.
+This document describes the internal architecture of `circuit-tracer` for contributors and advanced users.  For the user-facing API, see [api.md](api.md).  For the release roadmap, see [roadmap.md](roadmap.md).
 
 ## Core Concepts
 
@@ -31,15 +31,22 @@ circuit_tracer/
 ├── __init__.py                      # Public API (lazy imports)
 ├── _version.py                      # Single source of truth for version
 │
+├── analysis.py                      # High-level programmatic analysis API
+│   - get_top_features(): rank features by multi-hop influence
+│   - graph_to_interventions(): attribution → intervention bridge
+│   - compare_graphs(), find_common_circuit(): batch comparison
+│
 ├── graph.py                         # Graph class, pruning, influence computation
 │   - Graph: stores adjacency matrix, active features, logit targets
+│   - Graph.top_features(), .prune(), .scores(), .to_json(): convenience methods
 │   - prune_graph(): node + edge thresholding by influence
 │   - compute_graph_scores(): replacement & completeness metrics
 │
 ├── attribution/
 │   ├── __init__.py                  # Lazy imports (avoids circular deps with graph.py)
 │   ├── attribute.py                 # Unified attribution engine
-│   │   - attribute(): public entry point
+│   │   - attribute(): public entry point for single prompts
+│   │   - attribute_batch(): multi-prompt attribution
 │   │   - _run_attribution(): backend-agnostic core (uses model interface methods)
 │   ├── targets.py                   # LogitTarget, CustomTarget, AttributionTargets
 │   ├── context_nnsight.py           # NNSight-specific attribution context
