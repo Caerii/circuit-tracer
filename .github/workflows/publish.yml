@@ -15,11 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --no-sources
       - name: Lint
         run: uv run ruff check circuit_tracer/
       - name: Type check
@@ -30,11 +33,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --no-sources
       - name: Test
         run: uv run pytest tests/ -x -q -m "not requires_disk and not requires_gpu"
         continue-on-error: true  # Some tests need GPU; don't block publish
@@ -50,7 +56,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build
-        run: uv run python -m build
+        run: uv run --no-sources python -m build
       - uses: actions/upload-artifact@v4
         with:
           name: dist
