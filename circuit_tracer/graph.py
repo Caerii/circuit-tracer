@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import torch
 
@@ -38,7 +38,7 @@ class Graph:
         input_tokens: torch.Tensor,
         active_features: torch.Tensor,
         adjacency_matrix: torch.Tensor,
-        cfg: UnifiedConfig,
+        cfg: UnifiedConfig | Any,  # Also accepts HookedTransformerConfig (converted internally)
         selected_features: torch.Tensor,
         activation_values: torch.Tensor,
         logit_targets: list[LogitTarget],

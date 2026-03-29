@@ -81,7 +81,7 @@ class NNSightReplacementModel(LanguageModel):
         hf_tokenizer = AutoTokenizer.from_pretrained(config._name_or_path)  # type: ignore
 
         model = cls(hf_model, tokenizer=hf_tokenizer, dispatch=True, **kwargs)
-        model.config = config  # type: ignore
+        model._hf_config = config  # Store under a safe name (nnsight may override .config)
         model._configure_replacement_model(transcoders)
         return model
 
@@ -210,7 +210,10 @@ class NNSightReplacementModel(LanguageModel):
     ):
         self.backend = "nnsight"
         self.eval()
-        self.cfg = convert_nnsight_config_to_transformerlens(self.config)
+        # Resolve the HuggingFace config — nnsight may not expose .config reliably,
+        # so we fall back to _hf_config which we set explicitly in from_config().
+        hf_config = self.config if self.config is not None else getattr(self, "_hf_config", None)
+        self.cfg = convert_nnsight_config_to_transformerlens(hf_config)
 
         # special case to zero out <bos><start_of_turn>user\n for gemmascope 2 (-it) transcoders
         gemma_3_it = "gemma-3" in self.cfg.model_name and self.cfg.model_name.endswith("-it")
