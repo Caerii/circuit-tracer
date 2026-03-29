@@ -1,132 +1,161 @@
 # circuit-tracer
 
-This library implements tools for finding circuits using features from (cross-layer) MLP transcoders, as originally introduced by [Ameisen et al. (2025)](https://transformer-circuits.pub/2025/attribution-graphs/methods.html) and [Lindsey et al. (2025)](https://transformer-circuits.pub/2025/attribution-graphs/biology.html).
+[![PyPI version](https://img.shields.io/pypi/v/circuit-tracer.svg)](https://pypi.org/project/circuit-tracer/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/Caerii/circuit-tracer/actions/workflows/ci.yaml/badge.svg)](https://github.com/Caerii/circuit-tracer/actions/workflows/ci.yaml)
 
-Our library performs three main tasks. 
-1. Given a model with pre-trained transcoders, it finds the circuit / attribution graph; i.e., it computes the direct effect that each non-zero transcoder feature, transcoder error node, and input token has on each other non-zero transcoder feature and output logit.
-2. Given an attribution graph, it visualizes this graph and allows you to annotate these features.
-3. Enables interventions on a model's transcoder features using the insights gained from the attribution graph; i.e. you can set features to arbitrary values, and observe how model output changes.
+Find, visualize, and intervene on circuits inside language models using features from (cross-layer) MLP transcoders, as introduced by [Ameisen et al. (2025)](https://transformer-circuits.pub/2025/attribution-graphs/methods.html) and [Lindsey et al. (2025)](https://transformer-circuits.pub/2025/attribution-graphs/biology.html).
+
+## What does it do?
+
+1. **Attribution**: Given a model with pre-trained transcoders, compute the direct effect that each non-zero transcoder feature, error node, and input token has on each other feature and output logit — producing a full circuit / attribution graph.
+2. **Visualization**: View and annotate the resulting graph in an interactive browser UI (the same frontend used in [the original papers](https://transformer-circuits.pub/2025/attribution-graphs/methods.html)).
+3. **Intervention**: Set transcoder features to arbitrary values and observe how model output changes, validating the circuits you discover.
+
+---
+
+## Installation
+
+### From PyPI (recommended)
+
+```bash
+pip install circuit-tracer
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv add circuit-tracer
+```
+
+### Optional extras
+
+```bash
+# Visualization dependencies (seaborn, ipykernel, ipywidgets)
+pip install circuit-tracer[viz]
+
+# Everything (viz + dev tools)
+pip install circuit-tracer[all]
+```
+
+### From source
+
+```bash
+git clone https://github.com/Caerii/circuit-tracer.git
+cd circuit-tracer
+uv sync --group dev
+```
+
+---
+
+## Quick Start
+
+```python
+from circuit_tracer import ReplacementModel, Graph, attribute
+
+# Load a model with transcoders
+model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
+
+# Find the circuit for a prompt
+graph = attribute(model, "The capital of France is")
+
+# Save for later analysis
+graph.to_pt("france_capital.pt")
+
+# Or load an existing graph
+graph = Graph.from_pt("france_capital.pt")
+```
+
+For a complete walkthrough, try the [tutorial notebook](https://github.com/Caerii/circuit-tracer/blob/main/demos/circuit_tracing_tutorial.ipynb)!
+
+---
 
 ## Getting Started
-One quick way to start is to try our [tutorial notebook](https://github.com/safety-research/circuit-tracer/blob/main/demos/circuit_tracing_tutorial.ipynb)! 
 
-You can also find circuits and visualize them in one of three ways:
-1. Use `circuit-tracer` on [Neuronpedia](https://www.neuronpedia.org/gemma-2-2b/graph?slug=gemma-fact-dallas-austin&pinnedIds=27_22605_10%2C20_15589_10%2CE_26865_9%2C21_5943_10%2C23_12237_10%2C20_15589_9%2C16_25_9%2C14_2268_9%2C18_8959_10%2C4_13154_9%2C7_6861_9%2C19_1445_10%2CE_2329_7%2CE_6037_4%2C0_13727_7%2C6_4012_7%2C17_7178_10%2C15_4494_4%2C6_4662_4%2C4_7671_4%2C3_13984_4%2C1_1000_4%2C19_7477_9%2C18_6101_10%2C16_4298_10%2C7_691_10&supernodes=%5B%5B%22state%22%2C%226_4012_7%22%2C%220_13727_7%22%5D%2C%5B%22preposition+followed+by+place+name%22%2C%2219_1445_10%22%2C%2218_6101_10%22%5D%2C%5B%22Texas%22%2C%2220_15589_10%22%2C%2220_15589_9%22%2C%2219_7477_9%22%2C%2216_25_9%22%2C%224_13154_9%22%2C%2214_2268_9%22%2C%227_6861_9%22%5D%2C%5B%22capital+%2F+capital+cities%22%2C%2215_4494_4%22%2C%226_4662_4%22%2C%224_7671_4%22%2C%223_13984_4%22%2C%221_1000_4%22%2C%2221_5943_10%22%2C%2217_7178_10%22%2C%227_691_10%22%2C%2216_4298_10%22%5D%5D&pruningThreshold=0.6&clickedId=21_5943_10&densityThreshold=0.99) - no installation required! Just click on `+ New Graph` to create your own, or use the drop-down menu to select an existing graph.
-2. Run `circuit-tracer` via a Python script or Jupyter notebook. Start with our [tutorial notebook](https://github.com/safety-research/circuit-tracer/blob/main/demos/circuit_tracing_tutorial.ipynb). This will work on Colab with the GPU resources provided for free by default - just click on the Colab badge! Check out the **Demos** section below for more tutorials. You can also run these demo notebooks locally, with your own compute.
-3. Run `circuit-tracer` via the command-line interface. This can only be done with your own compute. For more on how to do that, see **Command-Line Interface**. 
+There are three ways to use circuit-tracer:
 
-Working with Gemma-2 (2B) is possible with relatively limited GPU resources; Colab GPUs have 15GB of RAM. More GPU RAM will allow you to do less offloading, and to use a larger batch size. 
+1. **On Neuronpedia** (no install needed): Use `circuit-tracer` directly on [Neuronpedia](https://www.neuronpedia.org/gemma-2-2b/graph?slug=gemma-fact-dallas-austin&pinnedIds=27_22605_10%2C20_15589_10%2CE_26865_9%2C21_5943_10%2C23_12237_10%2C20_15589_9%2C16_25_9%2C14_2268_9%2C18_8959_10%2C4_13154_9%2C7_6861_9%2C19_1445_10%2CE_2329_7%2CE_6037_4%2C0_13727_7%2C6_4012_7%2C17_7178_10%2C15_4494_4%2C6_4662_4%2C4_7671_4%2C3_13984_4%2C1_1000_4%2C19_7477_9%2C18_6101_10%2C16_4298_10%2C7_691_10&supernodes=%5B%5B%22state%22%2C%226_4012_7%22%2C%220_13727_7%22%5D%2C%5B%22preposition+followed+by+place+name%22%2C%2219_1445_10%22%2C%2218_6101_10%22%5D%2C%5B%22Texas%22%2C%2220_15589_10%22%2C%2220_15589_9%22%2C%2219_7477_9%22%2C%2216_25_9%22%2C%224_13154_9%22%2C%2214_2268_9%22%2C%227_6861_9%22%5D%2C%5B%22capital+%2F+capital+cities%22%2C%2215_4494_4%22%2C%226_4662_4%22%2C%224_7671_4%22%2C%223_13984_4%22%2C%221_1000_4%22%2C%2221_5943_10%22%2C%2217_7178_10%22%2C%227_691_10%22%2C%2216_4298_10%22%5D%5D&pruningThreshold=0.6&clickedId=21_5943_10&densityThreshold=0.99). Click `+ New Graph` to create your own, or browse existing graphs from the drop-down.
 
-Currently, intervening on models with respect to the transcoder features you discover in your graphs is possible both when using `circuit-tracer` in a script or notebook, or on Neuronpedia for Gemma-2 (2B). To perform interventions on Neuronpedia, ensure at least one node is pinned, then click "Steer" in the subgraph.
+2. **Python script / Jupyter notebook**: Start with the [tutorial notebook](https://github.com/Caerii/circuit-tracer/blob/main/demos/circuit_tracing_tutorial.ipynb) (runs on free Colab GPUs). See the **Demos** section below.
 
-### Installation
-To install this library, clone it and run the command  `pip install .` in its directory.
+3. **Command-line interface**: Run the full attribution-to-visualization pipeline from your terminal. See **CLI Usage** below.
 
-### Demos
-We include some demos showing how to use our library in the `demos` folder. The main demo is [`demos/circuit_tracing_tutorial.ipynb`](https://github.com/safety-research/circuit-tracer/blob/main/demos/circuit_tracing_tutorial.ipynb), which replicates two of the findings from [this paper](https://transformer-circuits.pub/2025/attribution-graphs/biology.html) using Gemma 2 (2B). All demos except for the Llama demo can be run on Colab.
+Working with Gemma-2 (2B) is possible with relatively limited GPU resources; Colab GPUs have 15GB of RAM. More GPU RAM allows less offloading and larger batch sizes.
 
-We also make two simple demos of attribution and intervention available, for those who want to learn more about how to use the library:
-- [`demos/attribute_demo.ipynb`](https://github.com/safety-research/circuit-tracer/blob/main/demos/attribute_demo.ipynb): Demonstrates how to find circuits and visualize them. 
-- [`demos/attribution_targets_demo.ipynb`](https://github.com/safety-research/circuit-tracer/blob/main/demos/attribution_targets_demo.ipynb): Demonstrates how to find circuits by specifying attribution targets, i.e. specific logits (or related quantities) that you wish to attribute from. 
-- [`demos/intervention_demo.ipynb`](https://github.com/safety-research/circuit-tracer/blob/main/demos/intervention_demo.ipynb): Demonstrates how to perform interventions on models. 
+---
 
-We finally provide demos that dig deeper into specific, pre-computed and pre-annotated attribution graphs, performing interventions to demonstrate the correctness of the annotated graph:
-- [`demos/gemma_demo.ipynb`](https://github.com/safety-research/circuit-tracer/blob/main/demos/gemma_demo.ipynb): Explores graphs from Gemma 2 (2B).
-- [`demos/gemma_it_demo.ipynb`](https://github.com/safety-research/circuit-tracer/blob/main/demos/gemma_it_demo.ipynb): Explores graphs from instruction-tuned Gemma 2 (2B), using transcoders from the base model.
-- [`demos/llama_demo.ipynb`](https://github.com/safety-research/circuit-tracer/blob/main/demos/llama_demo.ipynb): Explores graphs from Llama 3.2 (1B). Not supported on Colab.
+## Supported Models & Transcoders
 
-We also provide a number of annotated attribution graphs for both models, which can be found at the top of their two demo notebooks.
+The following transcoders are available. Use the HuggingFace repo name as the `transcoders` argument of `ReplacementModel.from_pretrained`, or as `--transcoder_set` in the CLI.
 
-## Usage
-### Available Transcoders
-The following transcoders are available for use with `circuit-tracer`; this means that the transcoder weights and features are both available (so features will load properly when you run the visualization server). You can use the HuggingFace repo name (e.g. `mntss/gemma-scope-transcoders`) as the `transcoders` argument of `ReplacementModel.from_pretrained`, or as the argument of `--transcoder_set` in the CLI. 
-- Gemma-2 (2B): [PLTs](https://huggingface.co/mntss/gemma-scope-transcoders) (originally from [GemmaScope](https://huggingface.co/google/gemma-scope)) and CLTs with 2 feature counts: [426K](https://huggingface.co/mntss/clt-gemma-2-2b-426k) and [2.5M](https://huggingface.co/mntss/clt-gemma-2-2b-2.5M)
-- Llama-3.2 (1B): [PLTs](https://huggingface.co/mntss/transcoder-Llama-3.2-1B) and [CLTs](https://huggingface.co/mntss/clt-llama-3.2-1b-524k)
-- Qwen-3 PLTs: for Qwen-3 [0.6B](https://huggingface.co/mwhanna/qwen3-0.6b-transcoders-lowl0), [1.7B](https://huggingface.co/mwhanna/qwen3-1.7b-transcoders-lowl0), [4B](https://huggingface.co/mwhanna/qwen3-4b-transcoders), [8B](https://huggingface.co/mwhanna/qwen3-8b-transcoders), and [14B](https://huggingface.co/mwhanna/qwen3-14b-transcoders-lowl0)
-- [GPT-OSS (20B) CLT](https://huggingface.co/mntss/clt-131k)
-- Gemma-3 PLTs (originally from [GemmaScope-2](https://huggingface.co/google/gemma-scope-2)) can be found [here for models of size 270M, 1B, 4B, 12B, and 27B, PT and IT](https://huggingface.co/collections/mwhanna/gemma-scope-2-transcoders-circuit-tracer). These require using the `nnsight` backend.
-
+| Model | Transcoder Type | HuggingFace Repo | Notes |
+|-------|----------------|-------------------|-------|
+| **Gemma-2 (2B)** | PLT | [`mntss/gemma-scope-transcoders`](https://huggingface.co/mntss/gemma-scope-transcoders) | Originally from GemmaScope |
+| **Gemma-2 (2B)** | CLT (426K) | [`mntss/clt-gemma-2-2b-426k`](https://huggingface.co/mntss/clt-gemma-2-2b-426k) | |
+| **Gemma-2 (2B)** | CLT (2.5M) | [`mntss/clt-gemma-2-2b-2.5M`](https://huggingface.co/mntss/clt-gemma-2-2b-2.5M) | |
+| **Llama-3.2 (1B)** | PLT | [`mntss/transcoder-Llama-3.2-1B`](https://huggingface.co/mntss/transcoder-Llama-3.2-1B) | |
+| **Llama-3.2 (1B)** | CLT | [`mntss/clt-llama-3.2-1b-524k`](https://huggingface.co/mntss/clt-llama-3.2-1b-524k) | |
+| **Qwen-3** | PLT | [0.6B](https://huggingface.co/mwhanna/qwen3-0.6b-transcoders-lowl0), [1.7B](https://huggingface.co/mwhanna/qwen3-1.7b-transcoders-lowl0), [4B](https://huggingface.co/mwhanna/qwen3-4b-transcoders), [8B](https://huggingface.co/mwhanna/qwen3-8b-transcoders), [14B](https://huggingface.co/mwhanna/qwen3-14b-transcoders-lowl0) | |
+| **GPT-OSS (20B)** | CLT | [`mntss/clt-131k`](https://huggingface.co/mntss/clt-131k) | |
+| **Gemma-3** | PLT | [Collection](https://huggingface.co/collections/mwhanna/gemma-scope-2-transcoders-circuit-tracer) | 270M to 27B, PT & IT. Requires `nnsight` backend. |
 
 ### Choosing a Backend
-By default, `circuit-tracer` creates a `ReplacementModel` that inherits from the `TransformerLens` `HookedTransformer` class. However, `TransformerLens` does not support all HuggingFace models; it only supports those implemented in `TransformerLens`. 
 
-Creating a `ReplacementModel` with `backend='nnsight'` will create an `nnsight`-backed `ReplacementModel` that inherits from its `LanguageModel` class; this supports most HuggingFace models. That is, you can create an `nnsight` `ReplacementModel` using `ReplacementModel.from_pretrained(model_name, backend='nnsight')`. Note, however, that the `nnsight` backend is still experimental: it is slower and less memory-efficient, and may not provide all of the functionality of the `TransformerLens` version.
+By default, `circuit-tracer` uses the **TransformerLens** backend (inherits from `HookedTransformer`). For models not supported by TransformerLens, use the **NNSight** backend:
 
-### Caching
-In order to use the `lazy_decoder` and `lazy_encoder` options on transcoders, they must be stored in `circuit-tracer`-compatible format. While many transcoders have been uploaded in that format to HuggingFace, this requires large amounts of storage. `circuit-tracer` now supports instead creating a local cache of models, by calling e.g.
+```python
+# TransformerLens (default) — fast, memory-efficient
+model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
+
+# NNSight — supports most HuggingFace models
+model = ReplacementModel.from_pretrained("google/gemma-3-4b-pt", "gemma-3", backend="nnsight")
+```
+
+> **Note**: The NNSight backend is still experimental: it is slower and less memory-efficient, and may not provide all of the functionality of the TransformerLens version.
+
+---
+
+## Demos
+
+All demos live in the [`demos/`](https://github.com/Caerii/circuit-tracer/tree/main/demos) folder. The main tutorial can run on free Colab GPUs.
+
+| Notebook | Description |
+|----------|-------------|
+| [**circuit_tracing_tutorial.ipynb**](https://github.com/Caerii/circuit-tracer/blob/main/demos/circuit_tracing_tutorial.ipynb) | End-to-end tutorial replicating findings from [Lindsey et al.](https://transformer-circuits.pub/2025/attribution-graphs/biology.html) |
+| [attribute_demo.ipynb](https://github.com/Caerii/circuit-tracer/blob/main/demos/attribute_demo.ipynb) | How to find circuits and visualize them |
+| [attribution_targets_demo.ipynb](https://github.com/Caerii/circuit-tracer/blob/main/demos/attribution_targets_demo.ipynb) | Specifying custom attribution targets (specific logits or directions) |
+| [intervention_demo.ipynb](https://github.com/Caerii/circuit-tracer/blob/main/demos/intervention_demo.ipynb) | Performing feature interventions on models |
+| [gemma_demo.ipynb](https://github.com/Caerii/circuit-tracer/blob/main/demos/gemma_demo.ipynb) | Pre-annotated Gemma-2 (2B) graphs with interventions |
+| [gemma_it_demo.ipynb](https://github.com/Caerii/circuit-tracer/blob/main/demos/gemma_it_demo.ipynb) | Instruction-tuned Gemma-2 (2B) with base-model transcoders |
+| [llama_demo.ipynb](https://github.com/Caerii/circuit-tracer/blob/main/demos/llama_demo.ipynb) | Llama 3.2 (1B) graphs (requires local GPU, not Colab) |
+
+---
+
+## Caching
+
+To use `lazy_decoder` and `lazy_encoder` options on transcoders, they must be in `circuit-tracer`-compatible format. Rather than downloading pre-converted weights, you can build a local cache:
 
 ```python
 from circuit_tracer.utils.caching import save_transcoders_to_cache
 
-hf_ref = "mwhanna/gemma-scope-2-27b-pt/transcoder_all/width_262k_l0_small"
-cache_dir = '~/.cache/'
-save_transcoders_to_cache(hf_ref, cache_dir=cache_dir)
+save_transcoders_to_cache(
+    "mwhanna/gemma-scope-2-27b-pt/transcoder_all/width_262k_l0_small",
+    cache_dir="~/.cache/",
+)
 ```
 
-You can also empty the cache using `circuit_tracer.utils.caching.empty_cache`.
+Clear the cache with `circuit_tracer.utils.caching.empty_cache`.
 
-## Command-Line Interface
+---
 
-The unified CLI performs the complete 3-step process for finding and visualizing circuits:
+## CLI Usage
 
-### 3-Step Process
-1. **Attribution**: Runs the attribution algorithm to find the circuit/attribution graph, computing direct effects between transcoder features, error nodes, tokens, and output logits.
-2. **Graph File Creation**: Prunes the attribution graph to remove low-effect nodes and edges, then converts it to JSON format suitable for visualization.
-3. **Local Server**: Starts a local web server to visualize and interact with the graph in your browser.
+The CLI runs the complete 3-step pipeline: **attribution** -> **graph file creation** -> **visualization server**.
 
 ### Basic Usage
-To find a circuit, create the graph files, and start up a local server, use the command:
 
-```
-circuit-tracer attribute --prompt [prompt] --transcoder_set [transcoder_set] --slug [slug] --graph_file_dir [directory] --slug [slug] --graph_file_dir [graph_file_dir] --server
-```
-
-It will tell you where the server is serving (something like `localhost:[port]`). If you run this command on a remote machine, make sure to enable port forwarding, so you can see the graphs locally!
-
-### Mandatory Arguments
-**Attribution**
-- `--prompt` (`-p`): The input prompt to analyze
-- `--transcoder_set` (`-t`): The set of transcoders to use for attribution. Options:
-  - HuggingFace repository ID (e.g., `mntss/gemma-scope-transcoders`, `username/repo-name@revision`)
-  - Convenience shortcuts: `gemma` (GemmaScope transcoders) or `llama` (ReLU transcoders)
-
-**Graph File Creation**
-
-These are required if you want to run a local web server for visualization:
-- `--slug`: A name/identifier for your analysis run
-- `--graph_file_dir`: Directory path where JSON graph files will be saved
-
-You can also save the raw attribution graph (to be loaded and used in Python later):
-- `--graph_output_path` (`-o`): Path to save the raw attribution graph (`.pt` file)
-
-You must set `--slug` and `--graph_file_dir`, or `--graph_output_path`, or both! Otherwise the CLI will output nothing.
-
-**Local Server**
-- `--server`: Start a local web server for graph visualization
-
-### Optional Arguments
-
-**Attribution Parameters:**
-- `--model` (`-m`): Model architecture (auto-inferred for `gemma` and `llama` presets)
-- `--max_n_logits` (default: 10): Maximum number of logit nodes to attribute from
-- `--desired_logit_prob` (default: 0.95): Cumulative probability threshold for top logits
-- `--batch_size` (default: 256): Batch size for backward passes
-- `--max_feature_nodes`: Maximum number of feature nodes (defaults to 7500)
-- `--dtype`: Datatype in which to load the model / transcoders (allowed: `float32/fp32`, `float16/fp16`, `bfloat16/bf16`)
-- `--offload`: Memory optimization option (`cpu`, `disk`, or `None`)
-- `--verbose`: Display detailed progress information
-
-**Graph Pruning Parameters:**
-- `--node_threshold` (default: 0.8): Keeps minimum nodes with cumulative influence ≥ threshold
-- `--edge_threshold` (default: 0.98): Keeps minimum edges with cumulative influence ≥ threshold
-
-**Server Parameters:**
-- `--port` (default: 8041): Port for the local server
-
-### Examples
-
-**Complete workflow with visualization:**
-```
+```bash
 circuit-tracer attribute \
   --prompt "The International Advanced Security Group (IAS" \
   --transcoder_set gemma \
@@ -135,25 +164,108 @@ circuit-tracer attribute \
   --server
 ```
 
-**Attribution only (save raw graph):**
-```
+The server URL (e.g. `localhost:8041`) will be printed. If running on a remote machine, enable port forwarding to view the graphs locally.
+
+### Attribution only (save raw graph)
+
+```bash
 circuit-tracer attribute \
   --prompt "The capital of France is" \
   --transcoder_set llama \
   --graph_output_path france_capital.pt
 ```
 
+### CLI Arguments
+
+#### Required
+
+| Argument | Description |
+|----------|-------------|
+| `--prompt` (`-p`) | Input prompt to analyze |
+| `--transcoder_set` (`-t`) | Transcoders to use (HuggingFace repo ID, or shortcut: `gemma`, `llama`) |
+
+Plus at least one output destination:
+- `--slug` + `--graph_file_dir` (for visualization), and/or
+- `--graph_output_path` (`-o`) (for raw `.pt` graph)
+
+#### Optional
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--model` (`-m`) | auto | Model name (auto-inferred for `gemma`/`llama` presets) |
+| `--max_n_logits` | 10 | Maximum logit nodes to attribute from |
+| `--desired_logit_prob` | 0.95 | Cumulative probability threshold for top logits |
+| `--batch_size` | 256 | Batch size for backward passes |
+| `--max_feature_nodes` | 7500 | Maximum feature nodes |
+| `--dtype` | model default | Load dtype (`float32`/`fp32`, `float16`/`fp16`, `bfloat16`/`bf16`) |
+| `--offload` | None | Memory optimization (`cpu`, `disk`, or `None`) |
+| `--node_threshold` | 0.8 | Node pruning: keep nodes with cumulative influence >= threshold |
+| `--edge_threshold` | 0.98 | Edge pruning: keep edges with cumulative influence >= threshold |
+| `--port` | 8041 | Local server port |
+| `--server` | false | Start visualization server after attribution |
+| `--verbose` | false | Show detailed progress |
+
 ### Graph Annotation
-When using the `--server` option, your browser will open to a local visualization interface. The interface is the same as in [the original papers](https://transformer-circuits.pub/2025/attribution-graphs/methods.html) (frontend available [here](https://github.com/anthropics/attribution-graphs-frontend)).
-- **Select a node**: Click on a node.
-- **Pin / unpin a node to subgraph pane**: Ctrl+click/Commmand+click the node.
-- **Annotate a node**: Click on the "Edit" button on the right side of the window while a node is selected to edit its annotation.
-- **Group nodes**: Hold G and click on nodes to group them together into a supernode. Hold G and click on the x next to a supernode to ungroup all of them.
-- **Annotate supernode / node group**: click on the label below the supernode to edit the supernode annotation.
+
+When using `--server`, the browser opens an interactive visualization:
+
+- **Select a node**: Click on it
+- **Pin/unpin to subgraph pane**: Ctrl+click (or Cmd+click)
+- **Annotate a node**: Click "Edit" on the right side while a node is selected
+- **Group nodes into a supernode**: Hold G and click on nodes
+- **Ungroup a supernode**: Hold G and click the x next to it
+- **Annotate a supernode**: Click on the label below it
+
+Interventions are also available on Neuronpedia for Gemma-2 (2B): pin at least one node, then click "Steer" in the subgraph.
+
+---
+
+## Project Structure
+
+```
+circuit_tracer/
+├── __init__.py                  # Public API: attribute, Graph, ReplacementModel
+├── _version.py                  # Single source of truth for version
+├── graph.py                     # Graph data structures, pruning, influence computation
+├── attribution/
+│   ├── attribute.py             # Unified attribution engine (both backends)
+│   └── targets.py               # LogitTarget, CustomTarget, AttributionTargets
+├── replacement_model/
+│   ├── common.py                # Shared utilities (tokenization, interventions)
+│   ├── replacement_model_nnsight.py
+│   └── replacement_model_transformerlens.py
+├── transcoder/
+│   ├── cross_layer_transcoder.py
+│   └── single_layer_transcoder.py
+├── frontend/                    # Visualization server and graph models
+└── utils/                       # Config mapping, caching, feature decoding, etc.
+```
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and development workflow. We use [uv](https://docs.astral.sh/uv/) for dependency management.
+
+```bash
+# Quick dev setup
+git clone https://github.com/Caerii/circuit-tracer.git
+cd circuit-tracer
+uv sync --group dev
+
+# Quality checks
+uv run ruff format && uv run ruff check && uv run pyright && uv run pytest tests -q
+```
+
+---
+
+## Active Maintainers
+
+- [Alif Jakir](https://github.com/Caerii)
 
 ## Cite
-You can cite this library as follows:
-```
+
+```bibtex
 @misc{circuit-tracer,
   author = {Hanna, Michael and Piotrowski, Mateusz and Lindsey, Jack and Ameisen, Emmanuel},
   title = {circuit-tracer},
@@ -162,4 +274,5 @@ You can cite this library as follows:
   year = {2025}
 }
 ```
-or cite the paper [here](https://aclanthology.org/2025.blackboxnlp-1.14/).
+
+Or cite the paper [here](https://aclanthology.org/2025.blackboxnlp-1.14/).
