@@ -134,6 +134,42 @@ class TestGetTopFeatures:
 # ── Graph convenience methods ───────────────────────────────────────
 
 
+
+class TestGraphConvenienceMethods:
+    def test_top_features_delegates(self):
+        graph = _make_graph()
+        features_method, scores_method = graph.top_features(n=3)
+        features_fn, scores_fn = get_top_features(graph, n=3)
+        assert features_method == features_fn
+        assert scores_method == scores_fn
+
+    def test_prune_returns_prune_result(self):
+        graph = _make_graph()
+        result = graph.prune()
+        assert isinstance(result, PruneResult)
+        assert result.node_mask.dtype == torch.bool
+        assert result.edge_mask.dtype == torch.bool
+
+    def test_scores_returns_tuple(self):
+        graph = _make_graph()
+        result = graph.scores()
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        r_score, c_score = result
+        assert isinstance(r_score, float)
+        assert isinstance(c_score, float)
+        assert 0.0 <= r_score <= 1.0
+        assert 0.0 <= c_score <= 1.0
+
+    def test_graph_interventions_delegates(self):
+        graph = _make_graph()
+        assert graph.interventions(n=2, value=1.5) == graph_to_interventions(
+            graph,
+            n=2,
+            value=1.5,
+        )
+
+
 # ── graph_to_interventions ──────────────────────────────────────────
 
 
