@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple
+import logging
 import warnings
+from typing import Any, NamedTuple
 
 import torch
 
-from circuit_tracer.utils.tl_nnsight_mapping import (
-    convert_nnsight_config_to_transformerlens,
-    UnifiedConfig,
-)
-from circuit_tracer.utils import get_default_device
 from circuit_tracer.attribution.targets import LogitTarget
+from circuit_tracer.utils import get_default_device
+from circuit_tracer.utils.tl_nnsight_mapping import (
+    UnifiedConfig,
+    convert_nnsight_config_to_transformerlens,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class Graph:
@@ -35,7 +38,7 @@ class Graph:
         input_tokens: torch.Tensor,
         active_features: torch.Tensor,
         adjacency_matrix: torch.Tensor,
-        cfg,
+        cfg: UnifiedConfig | Any,  # Also accepts HookedTransformerConfig (converted internally)
         selected_features: torch.Tensor,
         activation_values: torch.Tensor,
         logit_targets: list[LogitTarget],
@@ -84,16 +87,18 @@ class Graph:
         self.active_features = active_features
         self.input_tokens = input_tokens
         if scan_name is None:
-            print("Graph loaded without scan_name to identify it. Uploading will not be possible.")
+            logger.warning(
+                "Graph loaded without scan_name to identify it. Uploading will not be possible."
+            )
         self.scan_name = scan_name
         self.selected_features = selected_features
         self.activation_values = activation_values
 
-    def to(self, device):
+    def to(self, device: str | torch.device):
         """Send all relevant tensors to the device (cpu, cuda, etc.)
 
         Args:
-            device (_type_): device to send tensors
+            device: Target device for tensors.
         """
         self.adjacency_matrix = self.adjacency_matrix.to(device)
         self.active_features = self.active_features.to(device)
@@ -132,6 +137,27 @@ class Graph:
         )
         return self.logit_token_ids
 
+    def to_pt(self, path: str):
+        """Saves the graph at the given path
+
+        Args:
+            path (str): The path where the graph will be saved. Should end in .pt
+        """
+        d = {
+            "input_string": self.input_string,
+            "adjacency_matrix": self.adjacency_matrix,
+            "cfg": self.cfg,
+            "active_features": self.active_features,
+            "logit_targets": self.logit_targets,
+            "logit_probabilities": self.logit_probabilities,
+            "vocab_size": self.vocab_size,
+            "input_tokens": self.input_tokens,
+            "selected_features": self.selected_features,
+            "activation_values": self.activation_values,
+            "scan_name": self.scan_name,
+        }
+        torch.save(d, path)
+
     # ── Convenience methods (delegate to standalone functions) ───────
 
     def top_features(self, n: int = 10) -> tuple[list[tuple[int, int, int]], list[float]]:
@@ -144,7 +170,7 @@ class Graph:
 
         return get_top_features(self, n)
 
-    def prune(self, node_threshold: float = 0.8, edge_threshold: float = 0.98) -> "PruneResult":
+    def prune(self, node_threshold: float = 0.8, edge_threshold: float = 0.98) -> PruneResult:
         """Prune low-influence nodes and edges.
 
         Shorthand for ``prune_graph(self, node_threshold, edge_threshold)``.
@@ -200,6 +226,12 @@ class Graph:
         """Export the graph as a pruned JSON file for the visualization frontend.
 
         Shorthand for ``create_graph_files(self, slug, output_path, ...)``.
+
+        Args:
+            slug: Short identifier for the graph (used as filename).
+            output_path: Directory to write the JSON file into.
+            node_threshold: Keep nodes with this fraction of total influence.
+            edge_threshold: Keep edges with this fraction of total influence.
         """
         from circuit_tracer.utils.create_graph_files import create_graph_files
 
@@ -211,29 +243,8 @@ class Graph:
             edge_threshold=edge_threshold,
         )
 
-    def to_pt(self, path: str):
-        """Saves the graph at the given path
-
-        Args:
-            path (str): The path where the graph will be saved. Should end in .pt
-        """
-        d = {
-            "input_string": self.input_string,
-            "adjacency_matrix": self.adjacency_matrix,
-            "cfg": self.cfg,
-            "active_features": self.active_features,
-            "logit_targets": self.logit_targets,
-            "logit_probabilities": self.logit_probabilities,
-            "vocab_size": self.vocab_size,
-            "input_tokens": self.input_tokens,
-            "selected_features": self.selected_features,
-            "activation_values": self.activation_values,
-            "scan_name": self.scan_name,
-        }
-        torch.save(d, path)
-
     @staticmethod
-    def from_pt(path: str, map_location="cpu") -> "Graph":
+    def from_pt(path: str, map_location="cpu") -> Graph:
         """Load a graph (saved using graph.to_pt) from a .pt file at the given path.
 
         Handles backward compatibility with older serialized graphs that stored

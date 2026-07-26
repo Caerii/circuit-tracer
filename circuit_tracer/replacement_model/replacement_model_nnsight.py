@@ -1,15 +1,15 @@
-import warnings
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from functools import partial
-from typing import Callable, Iterator, Literal, cast
+from typing import Literal, cast
 
 import torch
+from nnsight import CONFIG as NNSIGHT_CONFIG
+from nnsight import Envoy, LanguageModel, save
+from nnsight.intervention.tracing.tracer import Barrier
 from torch import nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from nnsight.intervention.tracing.tracer import Barrier
-from nnsight import LanguageModel, Envoy, save, CONFIG as NNSIGHT_CONFIG
 
 from circuit_tracer.attribution.context_nnsight import AttributionContext
 from circuit_tracer.replacement_model.common import (
@@ -24,13 +24,12 @@ from circuit_tracer.transcoder.cross_layer_transcoder import CrossLayerTranscode
 from circuit_tracer.utils import get_default_device
 from circuit_tracer.utils.hf_utils import load_transcoder_from_hub
 from circuit_tracer.utils.tl_nnsight_mapping import (
-    get_mapping,
     convert_nnsight_config_to_transformerlens,
+    get_mapping,
 )
 
 NNSIGHT_CONFIG.APP.PYMOUNT = False
 NNSIGHT_CONFIG.APP.CROSS_INVOKER = False
-NNSIGHT_CONFIG.APP.TRACE_CACHING = True
 
 
 class EnvoyWrapper:

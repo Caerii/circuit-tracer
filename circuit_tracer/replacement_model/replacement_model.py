@@ -3,6 +3,7 @@ Unified ReplacementModel interface that supports both nnsight and transformerlen
 """
 
 from typing import Literal
+
 import torch
 
 from circuit_tracer.transcoder import TranscoderSet

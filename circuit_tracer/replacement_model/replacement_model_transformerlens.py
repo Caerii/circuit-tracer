@@ -1,9 +1,8 @@
-import warnings
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from functools import partial
-from typing import Callable, Literal
+from typing import Literal
 
 import torch
 import torch.nn.functional as F
@@ -688,7 +687,7 @@ class TransformerLensReplacementModel(HookedTransformer):
         ]
 
         all_hooks = freeze_hooks + activation_hooks + delta_hooks + intervention_hooks
-        cached_logits = []
+        cached_logits: list[torch.Tensor | None] = [] if using_past_kv_cache else [None]
 
         def logit_cache_hook(activations, hook):
             # we need to manually apply the softcap (if used by the model), as it comes post-hook
