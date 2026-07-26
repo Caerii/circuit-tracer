@@ -4,6 +4,7 @@ Uses synthetic graphs — no GPU or model downloads required.
 """
 
 import gc
+import json
 
 import pytest
 import torch
@@ -15,6 +16,9 @@ from circuit_tracer.analysis import (
     find_common_circuit,
     get_top_features,
     graph_to_interventions,
+    summarize_graph,
+    summarize_intervention_results,
+    summarize_interventions,
 )
 from circuit_tracer.attribution.targets import LogitTarget
 from circuit_tracer.graph import Graph, PruneResult
@@ -161,6 +165,14 @@ class TestGraphConvenienceMethods:
         assert 0.0 <= r_score <= 1.0
         assert 0.0 <= c_score <= 1.0
 
+
+    def test_summary_delegates(self):
+        graph = _make_graph()
+        summary_method = graph.summary(top_n=2)
+        summary_fn = summarize_graph(graph, top_n=2)
+        assert summary_method == summary_fn
+        assert summary_method['kind'] == 'circuit-tracer.summary.v1'
+
     def test_graph_interventions_delegates(self):
         graph = _make_graph()
         assert graph.interventions(n=2, value=1.5) == graph_to_interventions(
@@ -207,6 +219,124 @@ class TestGraphToInterventions:
 
 # ── compare_graphs ──────────────────────────────────────────────────
 
+
+class TestSummarizeInterventions:
+    def test_returns_json_safe_intervention_plan(self):
+        graph = _make_graph()
+
+        summary = summarize_interventions(graph, n=3, value=0.0)
+
+        assert summary["kind"] == "circuit-tracer.interventions.v1"
+        assert summary["version"] == 1
+        assert summary["sourceGraph"]["kind"] == "circuit-tracer.summary.v1"
+        assert summary["sourceGraph"]["input"]["text"] == "ab"
+        assert summary["runtime"]["function"] == "ReplacementModel.feature_intervention"
+        assert summary["runtime"]["executed"] is False
+        assert summary["interventionType"] == "feature_ablation"
+        assert summary["interventionCount"] == 3
+        assert len(summary["interventions"]) == 3
+        assert summary["interventions"][0]["value"] == 0.0
+        assert "sourceInfluence" in summary["interventions"][0]
+        assert "sourceActivation" in summary["interventions"][0]
+        json.dumps(summary)
+
+    def test_nonzero_value_records_feature_set(self):
+        graph = _make_graph()
+
+        summary = summarize_interventions(graph, n=1, value=5.0)
+
+        assert summary["interventionType"] == "feature_set"
+        assert summary["value"] == 5.0
+        assert summary["interventions"][0]["value"] == 5.0
+
+    def test_graph_intervention_summary_delegates(self):
+        graph = _make_graph()
+
+        assert graph.intervention_summary(n=2, value=0.25) == summarize_interventions(
+            graph,
+            n=2,
+            value=0.25,
+        )
+
+
+class TestSummarizeInterventionResults:
+    def test_returns_json_safe_intervention_result(self):
+        graph = _make_graph()
+        plan = summarize_interventions(graph, n=2, value=0.0)
+        baseline_logits = torch.tensor([[1.0, 0.0, 2.0]])
+        intervened_logits = torch.tensor([[0.5, 2.5, 1.0]])
+
+        result = summarize_intervention_results(
+            plan,
+            baseline_logits,
+            intervened_logits,
+            target_token_ids=[1, 2],
+            top_k=2,
+            metadata={"backend": "synthetic"},
+        )
+
+        assert result["kind"] == "circuit-tracer.intervention-results.v1"
+        assert result["version"] == 1
+        assert result["sourcePlan"]["kind"] == "circuit-tracer.interventions.v1"
+        assert result["runtime"]["executed"] is True
+        assert result["effects"]["topBefore"]["vocabIndex"] == 2
+        assert result["effects"]["topAfter"]["vocabIndex"] == 1
+        assert result["effects"]["topTokenChanged"] is True
+        assert result["effects"]["maxAbsLogitDelta"] == 2.5
+        assert len(result["effects"]["targetEffects"]) == 2
+        assert result["effects"]["targetEffects"][0]["deltaLogit"] == 2.5
+        assert result["effects"]["topLogitShifts"][0]["vocabIndex"] == 1
+        assert result["metadata"]["backend"] == "synthetic"
+        json.dumps(result)
+
+    def test_rejects_mismatched_logit_shapes(self):
+        graph = _make_graph()
+        plan = summarize_interventions(graph, n=1)
+
+        with pytest.raises(ValueError, match="same final dimension"):
+            summarize_intervention_results(
+                plan,
+                torch.tensor([1.0, 2.0]),
+                torch.tensor([1.0, 2.0, 3.0]),
+            )
+
+    def test_rejects_out_of_range_target_token(self):
+        graph = _make_graph()
+        plan = summarize_interventions(graph, n=1)
+
+        with pytest.raises(ValueError, match="out of range"):
+            summarize_intervention_results(
+                plan,
+                torch.tensor([1.0, 2.0]),
+                torch.tensor([1.5, 2.5]),
+                target_token_ids=[3],
+            )
+
+
+class TestSummarizeGraph:
+    def test_returns_json_safe_summary(self):
+        graph = _make_graph()
+
+        summary = summarize_graph(graph, top_n=3)
+
+        assert summary["kind"] == "circuit-tracer.summary.v1"
+        assert summary["version"] == 1
+        assert summary["input"]["text"] == "ab"
+        assert summary["input"]["tokenCount"] == 2
+        assert summary["model"]["layers"] == 2
+        assert summary["nodeCounts"]["selectedFeatures"] == 5
+        assert len(summary["targets"]) == 1
+        assert len(summary["topFeatures"]) == 3
+        assert "replacementScore" in summary["metrics"]
+        assert "completenessScore" in summary["metrics"]
+        assert summary["pruning"]["keptNodeCount"] > 0
+
+    def test_can_skip_pruning_summary(self):
+        graph = _make_graph()
+
+        summary = summarize_graph(graph, node_threshold=None, edge_threshold=None)
+
+        assert summary["pruning"] is None
 
 class TestCompareGraphs:
     def test_basic_comparison(self):

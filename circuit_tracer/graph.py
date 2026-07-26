@@ -167,6 +167,28 @@ class Graph:
 
         return graph_to_interventions(self, n=n, value=value)
 
+    def summary(
+        self,
+        top_n: int = 10,
+        node_threshold: float | None = 0.8,
+        edge_threshold: float | None = 0.98,
+    ) -> dict:
+        """Return a JSON-safe summary for interchange with other tools."""
+        from circuit_tracer.analysis import summarize_graph
+
+        return summarize_graph(
+            self,
+            top_n=top_n,
+            node_threshold=node_threshold,
+            edge_threshold=edge_threshold,
+        )
+
+    def intervention_summary(self, n: int = 10, value: float = 0.0) -> dict:
+        """Return a JSON-safe intervention plan for the top-*n* graph features."""
+        from circuit_tracer.analysis import summarize_interventions
+
+        return summarize_interventions(self, n=n, value=value)
+
     def to_json(
         self,
         slug: str,
