@@ -83,7 +83,7 @@ class NNSightReplacementModel(LanguageModel):
         hf_tokenizer = AutoTokenizer.from_pretrained(config._name_or_path)  # type: ignore
 
         model = cls(hf_model, tokenizer=hf_tokenizer, dispatch=True, **kwargs)
-        model.config = config  # type: ignore
+        model._hf_config = config  # Store under a safe name (nnsight may override .config)
         model._configure_replacement_model(transcoders)
         return model
 
@@ -145,6 +145,7 @@ class NNSightReplacementModel(LanguageModel):
             attn_implementation="eager",
         )
 
+        model._hf_config = config  # Store under a safe name (nnsight may override .config)
         model._configure_replacement_model(transcoders)
         return model
 
@@ -212,7 +213,10 @@ class NNSightReplacementModel(LanguageModel):
     ):
         self.backend = "nnsight"
         self.eval()
-        self.cfg = convert_nnsight_config_to_transformerlens(self.config)
+        # Resolve the HuggingFace config — nnsight may not expose .config reliably,
+        # so we fall back to _hf_config which we set explicitly in from_config().
+        hf_config = self.config if self.config is not None else getattr(self, "_hf_config", None)
+        self.cfg = convert_nnsight_config_to_transformerlens(hf_config)
 
         # special case to zero out <bos><start_of_turn>user\n for gemmascope 2 (-it) transcoders
         gemma_3_it = "gemma-3" in self.cfg.model_name and self.cfg.model_name.endswith("-it")
@@ -229,7 +233,7 @@ class NNSightReplacementModel(LanguageModel):
         # property accessors which resolve the hooks on-demand inside the
         # appropriate trace context.
         # ------------------------------------------------------------------
-        nnsight_config = get_mapping(self.config.architectures[0])  # type: ignore
+        nnsight_config = get_mapping(self.cfg.original_architecture)
 
         self._feature_input_pattern, self._feature_input_io = nnsight_config.feature_hook_mapping[
             transcoder_set.feature_input_hook
@@ -386,22 +390,25 @@ class NNSightReplacementModel(LanguageModel):
 
     @contextmanager
     def zero_softcap(self):
-        if hasattr(self.config, "final_logit_softcapping"):
-            current_softcap = self.config.final_logit_softcapping  # type: ignore
+        # Use _hf_config (the real HuggingFace config) since nnsight may not
+        # reliably expose .config, and we need to mutate final_logit_softcapping.
+        hf_cfg = getattr(self, "_hf_config", None) or self.config
+        if hasattr(hf_cfg, "final_logit_softcapping"):
+            current_softcap = hf_cfg.final_logit_softcapping  # type: ignore
             try:
-                self.config.final_logit_softcapping = None  # type: ignore
+                hf_cfg.final_logit_softcapping = None  # type: ignore
                 yield
             finally:
-                self.config.final_logit_softcapping = current_softcap  # type: ignore
-        elif hasattr(self.config, "text_config") and hasattr(
-            self.config.text_config, "final_logit_softcapping"
+                hf_cfg.final_logit_softcapping = current_softcap  # type: ignore
+        elif hasattr(hf_cfg, "text_config") and hasattr(
+            hf_cfg.text_config, "final_logit_softcapping"
         ):
-            current_softcap = self.config.text_config.final_logit_softcapping  # type: ignore
+            current_softcap = hf_cfg.text_config.final_logit_softcapping  # type: ignore
             try:
-                self.config.text_config.final_logit_softcapping = None  # type: ignore
+                hf_cfg.text_config.final_logit_softcapping = None  # type: ignore
                 yield
             finally:
-                self.config.text_config.final_logit_softcapping = current_softcap  # type: ignore
+                hf_cfg.text_config.final_logit_softcapping = current_softcap  # type: ignore
         else:
             yield
 
