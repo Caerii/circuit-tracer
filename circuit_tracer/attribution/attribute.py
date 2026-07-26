@@ -122,6 +122,38 @@ def attribute(
             logger.removeHandler(handler)
 
 
+def attribute_batch(
+    prompts: Sequence[str | torch.Tensor | list[int]],
+    model: "NNSightReplacementModel | TransformerLensReplacementModel",
+    *,
+    verbose: bool = False,
+    **kwargs,
+) -> list[Graph]:
+    """Run attribution on multiple prompts, returning a list of graphs.
+
+    This is a thin wrapper around :func:`attribute` that iterates over
+    *prompts* sequentially.  The API contract is stable — future versions
+    may parallelise internally without changing the signature.
+
+    Args:
+        prompts: Sequence of prompts (strings, tensors, or token-id lists).
+        model: Frozen replacement model (either backend).
+        verbose: If ``True``, log progress for each prompt.
+        **kwargs: Forwarded to :func:`attribute` (e.g. ``batch_size``,
+            ``max_feature_nodes``, ``attribution_targets``).
+
+    Returns:
+        List of :class:`~circuit_tracer.graph.Graph` objects, one per prompt.
+    """
+    batch_logger = logging.getLogger("attribution")
+    results: list[Graph] = []
+    for i, prompt in enumerate(prompts):
+        if verbose:
+            batch_logger.info(f"Attributing prompt {i + 1}/{len(prompts)}")
+        results.append(attribute(prompt, model, verbose=verbose, **kwargs))
+    return results
+
+
 def _run_attribution(
     model,
     prompt,
