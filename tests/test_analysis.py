@@ -171,6 +171,14 @@ class TestGraphConvenienceMethods:
         assert summary_method == summary_fn
         assert summary_method["kind"] == "circuit-tracer.summary.v1"
 
+    @pytest.mark.requires_disk  # Needs HF tokenizer download
+    def test_to_json_creates_file(self, tmp_path):
+        graph = _make_graph()
+        graph.scan_name = "test-scan"  # Required for JSON export
+        graph.cfg.tokenizer_name = "google/gemma-2-2b"
+        graph.to_json(slug="test-graph", output_path=str(tmp_path))
+        assert (tmp_path / "test-graph.json").exists()
+
     def test_graph_interventions_delegates(self):
         graph = _make_graph()
         assert graph.interventions(n=2, value=1.5) == graph_to_interventions(
