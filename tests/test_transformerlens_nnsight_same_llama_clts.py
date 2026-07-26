@@ -3,8 +3,8 @@ import gc
 import pytest
 import torch
 
-from circuit_tracer.replacement_model import ReplacementModel
 from circuit_tracer.attribution.attribute import attribute
+from circuit_tracer.replacement_model import ReplacementModel
 from tests.conftest import has_32gb
 
 # Mark all tests in this module as requiring 32GB+ VRAM

@@ -9,7 +9,7 @@ from torch import device
 from tqdm import tqdm
 from transformers import AutoConfig, GptOssConfig
 
-from circuit_tracer import attribute, Graph, ReplacementModel
+from circuit_tracer import Graph, ReplacementModel, attribute
 from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from circuit_tracer.transcoder import SingleLayerTranscoder, TranscoderSet
 from circuit_tracer.transcoder.activation_functions import JumpReLU
@@ -444,6 +444,7 @@ def test_small_gpt_oss_model():
         tokenizer_class.all_special_ids = original_all_special_ids  # type:ignore
 
 
+@pytest.mark.slow
 def test_large_gpt_oss_model_with_dummy_clt():
     s = torch.tensor([0, 113, 24, 53, 27])
     model = load_large_gpt_oss_model_with_dummy_clt()
@@ -463,6 +464,7 @@ def test_large_gpt_oss_model_with_dummy_clt():
         tokenizer_class.all_special_ids = original_all_special_ids  # type:ignore
 
 
+@pytest.mark.slow
 def test_large_gpt_oss_model():
     s = torch.tensor([0, 113, 24, 53, 27])
     gpt_oss_large_cfg = GptOssConfig.from_dict(gpt_oss_config)

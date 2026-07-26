@@ -6,7 +6,6 @@ from unittest import mock
 
 import pytest
 import torch
-
 from huggingface_hub.errors import GatedRepoError, RepositoryNotFoundError
 
 # Import the function and exceptions you need to test or mock

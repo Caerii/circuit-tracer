@@ -138,7 +138,6 @@ class TestGetTopFeatures:
 # ── Graph convenience methods ───────────────────────────────────────
 
 
-
 class TestGraphConvenienceMethods:
     def test_top_features_delegates(self):
         graph = _make_graph()
@@ -165,13 +164,12 @@ class TestGraphConvenienceMethods:
         assert 0.0 <= r_score <= 1.0
         assert 0.0 <= c_score <= 1.0
 
-
     def test_summary_delegates(self):
         graph = _make_graph()
         summary_method = graph.summary(top_n=2)
         summary_fn = summarize_graph(graph, top_n=2)
         assert summary_method == summary_fn
-        assert summary_method['kind'] == 'circuit-tracer.summary.v1'
+        assert summary_method["kind"] == "circuit-tracer.summary.v1"
 
     def test_graph_interventions_delegates(self):
         graph = _make_graph()
@@ -216,6 +214,7 @@ class TestGraphToInterventions:
         interventions = graph_to_interventions(graph, n=3)
         for (fl, fp, fi), (il, ip, ii, _) in zip(features, interventions):
             assert (fl, fp, fi) == (il, ip, ii)
+
 
 # ── compare_graphs ──────────────────────────────────────────────────
 
@@ -337,6 +336,7 @@ class TestSummarizeGraph:
         summary = summarize_graph(graph, node_threshold=None, edge_threshold=None)
 
         assert summary["pruning"] is None
+
 
 class TestCompareGraphs:
     def test_basic_comparison(self):

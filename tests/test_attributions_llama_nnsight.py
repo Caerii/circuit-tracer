@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, LlamaConfig
 
-from circuit_tracer import attribute, ReplacementModel
+from circuit_tracer import ReplacementModel, attribute
 from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from circuit_tracer.transcoder import SingleLayerTranscoder, TranscoderSet
 from circuit_tracer.transcoder.activation_functions import TopK
@@ -120,6 +120,7 @@ def test_small_llama_model():
         tokenizer_class.all_special_ids = original_all_special_ids  # type:ignore
 
 
+@pytest.mark.slow
 def test_large_llama_model():
     s = torch.tensor([0, 113, 24, 53, 27])
     llama_large_config = llama_3_2_config

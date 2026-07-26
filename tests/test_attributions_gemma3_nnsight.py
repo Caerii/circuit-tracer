@@ -9,11 +9,11 @@ from nnsight import save
 from tqdm import tqdm
 from transformers import AutoConfig, Gemma3TextConfig
 
-from circuit_tracer import attribute, Graph, ReplacementModel
+from circuit_tracer import Graph, ReplacementModel, attribute
+from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from circuit_tracer.transcoder import SingleLayerTranscoder, TranscoderSet
 from circuit_tracer.transcoder.activation_functions import JumpReLU
 from circuit_tracer.transcoder.cross_layer_transcoder import CrossLayerTranscoder
-from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from tests.conftest import has_32gb
 
 gemma_3_config_dict = {
@@ -451,6 +451,7 @@ def test_small_gemma_model():
         tokenizer_class.all_special_ids = original_all_special_ids  # type:ignore
 
 
+@pytest.mark.slow
 def test_large_gemma_model():
     s = torch.tensor([0, 113, 24, 53, 27])
     gemma_large_cfg = copy.deepcopy(gemma_3_config)

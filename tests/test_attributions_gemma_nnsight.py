@@ -307,6 +307,7 @@ def test_small_gemma_model():
         tokenizer_class.all_special_ids = original_all_special_ids  # type:ignore
 
 
+@pytest.mark.slow
 def test_large_gemma_model():
     s = torch.tensor([0, 113, 24, 53, 27])
     gemma_large_cfg = gemma_2_config

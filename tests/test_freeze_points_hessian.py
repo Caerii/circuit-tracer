@@ -5,11 +5,11 @@ import torch
 from nnsight import save
 
 from circuit_tracer import ReplacementModel
-from circuit_tracer.replacement_model.replacement_model_transformerlens import (
-    TransformerLensReplacementModel,
-)
 from circuit_tracer.replacement_model.replacement_model_nnsight import (
     NNSightReplacementModel,
+)
+from circuit_tracer.replacement_model.replacement_model_transformerlens import (
+    TransformerLensReplacementModel,
 )
 
 
