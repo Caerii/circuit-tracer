@@ -3,8 +3,8 @@ from __future__ import annotations
 import glob
 import logging
 import os
-from typing import NamedTuple
 from collections.abc import Iterable
+from typing import NamedTuple
 from urllib.parse import parse_qs, urlparse
 
 import torch
@@ -104,7 +104,7 @@ def load_transcoder_from_hub(
         )
         raise FileNotFoundError(f"Could not download {config_file} from {hf_uri.repo_id}") from e
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     config["repo_id"] = hf_uri.repo_id

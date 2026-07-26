@@ -12,9 +12,9 @@ Key concepts:
   attribution functionality.
 """
 
+import logging
 from collections.abc import Sequence
 from typing import NamedTuple
-import logging
 
 import torch
 
