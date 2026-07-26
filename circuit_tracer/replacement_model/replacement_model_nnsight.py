@@ -30,7 +30,6 @@ from circuit_tracer.utils.tl_nnsight_mapping import (
 
 NNSIGHT_CONFIG.APP.PYMOUNT = False
 NNSIGHT_CONFIG.APP.CROSS_INVOKER = False
-NNSIGHT_CONFIG.APP.TRACE_CACHING = True
 
 
 class EnvoyWrapper:

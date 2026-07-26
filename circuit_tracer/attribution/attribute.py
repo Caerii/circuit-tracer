@@ -124,21 +124,23 @@ def attribute(
 
 def attribute_batch(
     prompts: Sequence[str | torch.Tensor | list[int]],
-    model: "NNSightReplacementModel | TransformerLensReplacementModel",
+    model,
     *,
     verbose: bool = False,
+    max_workers: int = 1,
     **kwargs,
 ) -> list[Graph]:
     """Run attribution on multiple prompts, returning a list of graphs.
 
-    This is a thin wrapper around :func:`attribute` that iterates over
-    *prompts* sequentially.  The API contract is stable — future versions
-    may parallelise internally without changing the signature.
-
     Args:
         prompts: Sequence of prompts (strings, tensors, or token-id lists).
-        model: Frozen replacement model (either backend).
+        model: A single frozen replacement model, or a sequence of models for
+            data-parallel attribution (prompts are round-robined across models).
         verbose: If ``True``, log progress for each prompt.
+        max_workers: Parallel worker count. Values ``<= 1`` run sequentially.
+            Values ``> 1`` require *model* to be a sequence with at least
+            ``max_workers`` entries (one model per worker). Sharing a single
+            CUDA model across threads is unsupported.
         **kwargs: Forwarded to :func:`attribute` (e.g. ``batch_size``,
             ``max_feature_nodes``, ``attribution_targets``).
 
@@ -146,12 +148,47 @@ def attribute_batch(
         List of :class:`~circuit_tracer.graph.Graph` objects, one per prompt.
     """
     batch_logger = logging.getLogger("attribution")
-    results: list[Graph] = []
-    for i, prompt in enumerate(prompts):
+    if isinstance(model, (list, tuple)):
+        models = list(model)
+        if not models:
+            raise ValueError("model list must be non-empty")
+    else:
+        models = [model]
+
+    if max_workers <= 1 or len(prompts) <= 1:
+        results: list[Graph] = []
+        for i, prompt in enumerate(prompts):
+            if verbose:
+                batch_logger.info(f"Attributing prompt {i + 1}/{len(prompts)}")
+            results.append(attribute(prompt, models[i % len(models)], verbose=verbose, **kwargs))
+        return results
+
+    if len(models) < max_workers:
+        raise ValueError(
+            f"max_workers={max_workers} requires at least as many model instances "
+            f"(got {len(models)}). Pass a list of models for data-parallel attribution."
+        )
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    workers = min(max_workers, len(prompts), len(models))
+    results_map: dict[int, Graph] = {}
+
+    def _run(index: int, prompt, worker_model) -> tuple[int, Graph]:
         if verbose:
-            batch_logger.info(f"Attributing prompt {i + 1}/{len(prompts)}")
-        results.append(attribute(prompt, model, verbose=verbose, **kwargs))
-    return results
+            batch_logger.info(f"Attributing prompt {index + 1}/{len(prompts)}")
+        return index, attribute(prompt, worker_model, verbose=verbose, **kwargs)
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [
+            executor.submit(_run, index, prompt, models[index % len(models)])
+            for index, prompt in enumerate(prompts)
+        ]
+        for future in as_completed(futures):
+            index, graph = future.result()
+            results_map[index] = graph
+
+    return [results_map[i] for i in range(len(prompts))]
 
 
 def _run_attribution(

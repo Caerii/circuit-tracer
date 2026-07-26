@@ -208,3 +208,53 @@ def create_graph_files(
 
     total_time_ms = (time.time() - total_start_time) * 1000
     logger.info(f"Total execution time: {total_time_ms=:.2f} ms")
+
+
+def export_graph_for_viz(
+    graph_or_path: Graph | str,
+    slug: str,
+    output_path: str,
+    *,
+    scan_name=None,
+    node_threshold: float = 0.8,
+    edge_threshold: float = 0.98,
+    neuronpedia_model: str | None = None,
+    neuronpedia_set: str | None = None,
+) -> dict:
+    """Export a graph for the local frontend and return open instructions.
+
+    Writes ``{slug}.json`` via :func:`create_graph_files`, then returns a small
+    JSON-safe dict with filesystem paths and optional Neuronpedia deep-link
+    hints (Neuronpedia upload remains manual / web UI).
+    """
+    import os
+
+    create_graph_files(
+        graph_or_path=graph_or_path,
+        slug=slug,
+        output_path=output_path,
+        scan_name=scan_name,
+        node_threshold=node_threshold,
+        edge_threshold=edge_threshold,
+    )
+    abs_dir = os.path.abspath(output_path)
+    graph_json = os.path.join(abs_dir, f"{slug}.json")
+    result = {
+        "kind": "circuit-tracer.viz-export.v1",
+        "version": 1,
+        "slug": slug,
+        "outputDir": abs_dir,
+        "graphJson": graph_json,
+        "serveCommand": f"circuit-tracer start-server --graph_file_dir {abs_dir}",
+        "neuronpedia": None,
+    }
+    if neuronpedia_model and neuronpedia_set:
+        result["neuronpedia"] = {
+            "model": neuronpedia_model,
+            "set": neuronpedia_set,
+            "hint": (
+                "Open the local JSON in the circuit-tracer UI, or upload/import "
+                f"features for {neuronpedia_model}/{neuronpedia_set} on neuronpedia.org"
+            ),
+        }
+    return result

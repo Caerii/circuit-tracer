@@ -47,48 +47,38 @@ Before v0.6.0, a user who called `attribute()` and got a `Graph` had no discover
 
 ---
 
-## v0.7.0 — Intervention & Steering (planned)
+## v0.7.0 — Intervention & Steering (in progress)
 
 **Theme**: Close the loop from understanding to action.
 
-### Planned additions
-- **Unified intervention interface** across both backends — ensure `feature_intervention()` is consistent between TransformerLens and NNSight
-- **`steer()` high-level function** — simplified API for feature steering without manually constructing intervention tuples:
-  ```python
-  from circuit_tracer import steer
-  output = steer(model, "The capital of France is",
-                 amplify=[(layer, pos, feat_idx, 2.0)],
-                 suppress=[(layer, pos, feat_idx)])
-  ```
-- **Intervention validation** — automatically verify that predicted effects match actual logit changes (the test-by-intervention pattern currently only in tests)
-- **`generate_with_interventions()`** — open-ended generation with persistent feature modifications
-- **Intervention serialization** — save/load intervention specs as JSON for reproducibility
+### Shipped early (on main, pre-tag)
+- **`steer()`** — amplify/suppress API over `feature_intervention` / `feature_intervention_generate`
+- **Intervention plan I/O** — `save_intervention_plan` / `load_intervention_plan` / `run_intervention_plan`
+- **`validate_intervention()`** — observe logit effects; optional adjacency prediction checks
+- **CLI parity** — `summarize`, `interventions`, `export-viz`
+
+### Still planned
+- Stronger cross-backend intervention parity tests in CI
+- Richer expected-effect APIs for custom target directions
+- First-class Neuronpedia upload (beyond export hints)
 
 ### Why it matters
 The mechanistic interpretability workflow is: attribute → identify circuit → intervene → confirm.  v0.6.0 covers the first two steps; v0.7.0 closes the loop with a production-quality intervention API.  This is what enables practical applications like safety monitoring and model behavior modification.
 
 ---
 
-## v0.8.0 — Statistical Circuit Analysis (planned)
+## v0.8.0 — Statistical Circuit Analysis (in progress)
 
 **Theme**: Scale from single-prompt to dataset-level analysis.
 
-### Planned additions
-- **Parallel `attribute_batch()`** — multi-GPU or batched attribution for throughput on large datasets
-- **`CircuitDataset`** — lightweight container for collections of graphs with metadata (prompt, label, model version):
-  ```python
-  dataset = CircuitDataset.from_prompts(prompts, model, labels=labels)
-  dataset.save("ioi_circuits/")
-  dataset = CircuitDataset.load("ioi_circuits/")
-  ```
-- **Circuit clustering** — group prompts by circuit similarity (which prompts use the same computational pathway?)
-- **Circuit regression testing** — detect when model fine-tuning changes established circuits:
-  ```python
-  baseline = CircuitDataset.load("baseline_circuits/")
-  current = CircuitDataset.from_prompts(prompts, finetuned_model)
-  drift = compare_datasets(baseline, current)
-  ```
-- **Statistical summaries** — aggregated feature importance across datasets, confidence intervals on circuit composition
+### Shipped early
+- **`attribute_batch(..., max_workers=)`** with multi-model data parallel
+- **`CircuitDataset`** save/load + **`compare_datasets()`** drift helper
+
+### Still planned
+- Multi-GPU orchestration helpers
+- Circuit clustering
+- Confidence intervals / aggregated statistical summaries
 
 ### Why it matters
 Single-prompt analysis answers "what circuit did the model use here?"  Dataset-level analysis answers "what circuits does the model use for this *class* of inputs?" — the question regulators, auditors, and alignment researchers actually need answered.
@@ -101,12 +91,7 @@ Single-prompt analysis answers "what circuit did the model use here?"  Dataset-l
 
 ### Planned additions
 - **Auto-mapping from HF config** — infer NNSight hook points from model architecture automatically, reducing `ModelMapping` boilerplate
-- **Mapping validation** — `validate_mapping(mapping, model_name)` checks that paths resolve to actual modules:
-  ```python
-  from circuit_tracer import validate_mapping, ModelMapping
-  warnings = validate_mapping(my_mapping, "mistralai/Mistral-7B-v0.3")
-  # ["Warning: model.layers[0].self_attn... not found, did you mean ...?"]
-  ```
+- **Mapping validation** — `validate_mapping(mapping, model_name)` soft-checks paths *(shipped early on main)*
 - **Architecture-specific test harness** — `test_new_architecture(model_name, mapping)` runs a minimal attribution and verifies edge correctness
 - **Mixture-of-Experts support** — handle MoE routing in attribution (which expert activates? why?)
 - **Community mapping registry** — accept contributed mappings via PRs with standardized test coverage

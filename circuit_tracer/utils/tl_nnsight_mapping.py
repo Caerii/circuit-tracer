@@ -277,6 +277,134 @@ def register_model(mapping: ModelMapping) -> None:
     _register(mapping)
 
 
+def _path_segments(path: str) -> list[str]:
+    """Split a dotted/indexed attribute path into lookup segments."""
+    segments: list[str] = []
+    token = ""
+    i = 0
+    while i < len(path):
+        char = path[i]
+        if char == ".":
+            if token:
+                segments.append(token)
+                token = ""
+            i += 1
+            continue
+        if char == "[":
+            if token:
+                segments.append(token)
+                token = ""
+            end = path.find("]", i)
+            if end == -1:
+                raise ValueError(f"Unclosed index in path: {path}")
+            segments.append(path[i + 1 : end])
+            i = end + 1
+            continue
+        token += char
+        i += 1
+    if token:
+        segments.append(token)
+    return segments
+
+
+def _resolve_path(root: Any, path: str) -> Any:
+    current = root
+    for segment in _path_segments(path):
+        if isinstance(current, (list, tuple)) and segment.isdigit():
+            current = current[int(segment)]
+            continue
+        if isinstance(current, dict):
+            current = current[segment]
+            continue
+        current = getattr(current, segment)
+    return current
+
+
+def validate_mapping(
+    mapping: ModelMapping,
+    model_name: str | None = None,
+    *,
+    model: Any | None = None,
+    n_layers: int | None = None,
+    sample_layer: int = 0,
+) -> list[str]:
+    """Check that a :class:`ModelMapping` resolves against a concrete model.
+
+    Loads ``AutoModelForCausalLM`` from *model_name* when *model* is omitted.
+    Patterns containing ``{layer}`` are expanded with *sample_layer* (default 0).
+
+    Returns:
+        A list of human-readable warnings. An empty list means all checked
+        paths resolved successfully.
+    """
+    warnings: list[str] = []
+
+    if model is None:
+        if model_name is None:
+            raise ValueError("Provide model_name or model")
+        from transformers import AutoConfig, AutoModelForCausalLM
+
+        config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+        architectures = getattr(config, "architectures", None) or []
+        if architectures and architectures[0] != mapping.model_architecture:
+            warnings.append(
+                f"Config architecture {architectures[0]!r} does not match "
+                f"mapping.model_architecture {mapping.model_architecture!r}"
+            )
+        if n_layers is None:
+            n_layers = getattr(config, "num_hidden_layers", None)
+            if n_layers is None and hasattr(config, "text_config"):
+                n_layers = getattr(config.text_config, "num_hidden_layers", None)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, trust_remote_code=True, torch_dtype="auto"
+        )
+
+    if n_layers is None:
+        n_layers = getattr(getattr(model, "config", None), "num_hidden_layers", 1) or 1
+
+    layer = min(max(sample_layer, 0), max(int(n_layers) - 1, 0))
+
+    def _check(label: str, path: str) -> None:
+        expanded = path.format(layer=layer)
+        # NNSight tracing paths often include `.source.` intermediates that do
+        # not exist on the raw HF module tree — strip them for static checks.
+        static_path = expanded.replace(".source.", ".")
+        # Drop trailing nn_functional / attention_interface leaves that only
+        # exist in the traced graph.
+        for marker in (
+            ".attention_interface_0.nn_functional_dropout_0",
+            ".attention_interface_0",
+            ".nn_functional_dropout_0",
+            ".torch_rsqrt_0",
+            ".self__norm_0",
+            ".self_experts_0",
+        ):
+            if static_path.endswith(marker):
+                static_path = static_path[: -len(marker)]
+                break
+            nested = marker + "."
+            if nested in static_path:
+                # Keep the prefix before the first traced-only marker.
+                static_path = static_path.split(".source.", 1)[0]
+                break
+        try:
+            _resolve_path(model, static_path)
+        except Exception as exc:  # noqa: BLE001 - collect soft warnings
+            warnings.append(f"{label}: could not resolve {expanded!r} ({static_path!r}): {exc}")
+
+    _check("attention_location_pattern", mapping.attention_location_pattern)
+    for index, path in enumerate(mapping.layernorm_scale_location_patterns):
+        _check(f"layernorm_scale_location_patterns[{index}]", path)
+    _check("pre_logit_location", mapping.pre_logit_location)
+    _check("embed_location", mapping.embed_location)
+    _check("embed_weight", mapping.embed_weight)
+    _check("unembed_weight", mapping.unembed_weight)
+    for hook_name, (path, _io) in mapping.feature_hook_mapping.items():
+        _check(f"feature_hook_mapping[{hook_name!r}]", path)
+
+    return warnings
+
+
 def auto_detect_mapping(model_name: str) -> ModelMapping | None:
     """Check whether a HuggingFace model is already supported.
 

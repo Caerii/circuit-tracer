@@ -175,6 +175,106 @@ def main():
         "--port", type=int, default=DEFAULT_SERVER_PORT, help="Port for the local server."
     )
 
+    # Summarize subcommand — analysis API parity
+    summarize_parser = subparsers.add_parser(
+        "summarize",
+        help="Emit a circuit-tracer.summary.v1 JSON document from a saved .pt graph",
+    )
+    summarize_parser.add_argument(
+        "-g",
+        "--graph",
+        required=True,
+        help="Path to a Graph .pt file produced by attribution.",
+    )
+    summarize_parser.add_argument(
+        "-o",
+        "--output",
+        help="Optional output JSON path (default: stdout).",
+    )
+    summarize_parser.add_argument("--top-n", type=int, default=10, help="Number of top features.")
+    summarize_parser.add_argument(
+        "--node-threshold",
+        type=float,
+        default=DEFAULT_NODE_THRESHOLD,
+        help="Pruning node threshold (set with --no-pruning to omit).",
+    )
+    summarize_parser.add_argument(
+        "--edge-threshold",
+        type=float,
+        default=DEFAULT_EDGE_THRESHOLD,
+        help="Pruning edge threshold (set with --no-pruning to omit).",
+    )
+    summarize_parser.add_argument(
+        "--no-pruning",
+        action="store_true",
+        help="Omit pruning statistics from the summary.",
+    )
+
+    interventions_parser = subparsers.add_parser(
+        "interventions",
+        help="Emit a circuit-tracer.interventions.v1 plan JSON from a saved .pt graph",
+    )
+    interventions_parser.add_argument(
+        "-g",
+        "--graph",
+        required=True,
+        help="Path to a Graph .pt file produced by attribution.",
+    )
+    interventions_parser.add_argument(
+        "-o",
+        "--output",
+        help="Optional output JSON path (default: stdout).",
+    )
+    interventions_parser.add_argument(
+        "-n", type=int, default=10, help="Number of top features to intervene on."
+    )
+    interventions_parser.add_argument(
+        "--value",
+        type=float,
+        default=0.0,
+        help="Intervention value (0.0 = ablation).",
+    )
+
+    export_parser = subparsers.add_parser(
+        "export-viz",
+        help="Export a .pt graph to frontend JSON and print serve instructions",
+    )
+    export_parser.add_argument(
+        "-g",
+        "--graph",
+        required=True,
+        help="Path to a Graph .pt file produced by attribution.",
+    )
+    export_parser.add_argument("--slug", required=True, help="Slug / filename stem for the JSON.")
+    export_parser.add_argument(
+        "--graph_file_dir",
+        required=True,
+        help="Directory to write frontend JSON into.",
+    )
+    export_parser.add_argument(
+        "--node_threshold", type=float, default=DEFAULT_NODE_THRESHOLD, help="Node prune threshold."
+    )
+    export_parser.add_argument(
+        "--edge_threshold", type=float, default=DEFAULT_EDGE_THRESHOLD, help="Edge prune threshold."
+    )
+    export_parser.add_argument(
+        "--neuronpedia-model",
+        type=str,
+        default=None,
+        help="Optional Neuronpedia model id for export hints.",
+    )
+    export_parser.add_argument(
+        "--neuronpedia-set",
+        type=str,
+        default=None,
+        help="Optional Neuronpedia feature-set id for export hints.",
+    )
+    export_parser.add_argument(
+        "-o",
+        "--output",
+        help="Optional path to write the viz-export metadata JSON (default: stdout).",
+    )
+
     args = parser.parse_args()
 
     if args.command == "attribute":
@@ -183,6 +283,73 @@ def main():
             run_server(args)
     elif args.command == "start-server":
         run_server(args)
+    elif args.command == "summarize":
+        run_summarize(args)
+    elif args.command == "interventions":
+        run_interventions(args)
+    elif args.command == "export-viz":
+        run_export_viz(args)
+
+
+def _write_json(doc, output_path: str | None) -> None:
+    import json
+
+    payload = json.dumps(doc, indent=2)
+    if output_path:
+        parent = os.path.dirname(output_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.write("\n")
+        logging.info(f"Wrote {output_path}")
+    else:
+        print(payload)
+
+
+def run_summarize(args):
+    from circuit_tracer.analysis import summarize_graph
+    from circuit_tracer.graph import Graph
+    from circuit_tracer.schema import validate_summary
+
+    graph = Graph.from_pt(args.graph)
+    node_threshold = None if args.no_pruning else args.node_threshold
+    edge_threshold = None if args.no_pruning else args.edge_threshold
+    summary = summarize_graph(
+        graph,
+        top_n=args.top_n,
+        node_threshold=node_threshold,
+        edge_threshold=edge_threshold,
+    )
+    validate_summary(summary)
+    _write_json(summary, args.output)
+
+
+def run_interventions(args):
+    from circuit_tracer.analysis import summarize_interventions
+    from circuit_tracer.graph import Graph
+    from circuit_tracer.schema import validate_summary
+
+    graph = Graph.from_pt(args.graph)
+    plan = summarize_interventions(graph, n=args.n, value=args.value)
+    validate_summary(plan)
+    _write_json(plan, args.output)
+
+
+def run_export_viz(args):
+    from circuit_tracer.utils.create_graph_files import export_graph_for_viz
+
+    result = export_graph_for_viz(
+        args.graph,
+        slug=args.slug,
+        output_path=args.graph_file_dir,
+        node_threshold=args.node_threshold,
+        edge_threshold=args.edge_threshold,
+        neuronpedia_model=args.neuronpedia_model,
+        neuronpedia_set=args.neuronpedia_set,
+    )
+    logging.info(result["serveCommand"])
+    _write_json(result, args.output)
 
 
 def run_attribution(args, parser):

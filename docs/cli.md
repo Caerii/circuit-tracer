@@ -30,9 +30,33 @@ circuit-tracer attribute \
   --graph_output_path france_capital.pt
 ```
 
+```bash
+# Analysis JSON from a saved graph (same schemas as the Python API)
+circuit-tracer summarize -g france_capital.pt -o summary.json --no-pruning
+circuit-tracer interventions -g france_capital.pt -o plan.json -n 10 --value 0.0
+
+# Export frontend JSON + print serve command / Neuronpedia hints
+circuit-tracer export-viz \
+  -g france_capital.pt \
+  --slug france-capital \
+  --graph_file_dir ./graph_files
+
+circuit-tracer start-server --graph_file_dir ./graph_files
+```
+
+## Commands
+
+| Command | Purpose |
+|---------|---------|
+| `attribute` | Run attribution (+ optional `.pt` / frontend JSON / server) |
+| `summarize` | Emit `circuit-tracer.summary.v1` JSON from a `.pt` graph |
+| `interventions` | Emit `circuit-tracer.interventions.v1` plan JSON from a `.pt` graph |
+| `export-viz` | Write frontend JSON via `export_graph_for_viz` |
+| `start-server` | Serve an existing graph JSON directory |
+
 ## Arguments
 
-### Required
+### `attribute` — Required
 
 | Argument | Short | Description |
 |----------|-------|-------------|
@@ -55,6 +79,8 @@ You must also specify at least one output:
 | `--dtype` | | model default | Load dtype: `float32`/`fp32`, `float16`/`fp16`, `bfloat16`/`bf16` |
 | `--offload` | | None | Memory optimization: `cpu`, `disk`, or `None` |
 | `--verbose` | | false | Display detailed progress information |
+| `--backend` | | transformerlens | Replacement-model backend: `transformerlens` or `nnsight` |
+| `--features_dir` | | None | Local transcoder feature files for the viz server |
 
 ### Optional — Pruning
 

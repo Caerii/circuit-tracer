@@ -1,0 +1,62 @@
+{
+  "kind": "circuit-tracer.summary.v1",
+  "version": 1,
+  "input": {
+    "text": "ab",
+    "tokenIds": [
+      0,
+      1
+    ],
+    "tokenCount": 2
+  },
+  "model": {
+    "name": "test-model",
+    "tokenizer": "test-tokenizer",
+    "layers": 2,
+    "vocabSize": 16,
+    "scan": "test-scan"
+  },
+  "targets": [
+    {
+      "token": "tok_0",
+      "vocabIndex": 0,
+      "probability": 1.0
+    }
+  ],
+  "nodeCounts": {
+    "selectedFeatures": 4,
+    "activeFeatures": 4,
+    "errorNodes": 4,
+    "tokenNodes": 2,
+    "logitNodes": 1,
+    "totalNodes": 11
+  },
+  "metrics": {
+    "replacementScore": 1.0,
+    "completenessScore": 1.0
+  },
+  "topFeatures": [
+    {
+      "layer": 1,
+      "position": 1,
+      "feature": 103,
+      "influence": 0.3076923191547394,
+      "activation": 4.0
+    },
+    {
+      "layer": 0,
+      "position": 0,
+      "feature": 102,
+      "influence": 0.26923078298568726,
+      "activation": 3.0
+    },
+    {
+      "layer": 1,
+      "position": 1,
+      "feature": 101,
+      "influence": 0.23076924681663513,
+      "activation": 2.0
+    }
+  ],
+  "pruning": null
+}

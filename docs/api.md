@@ -198,6 +198,43 @@ register_model(ModelMapping(
 
 To find the correct NNSight paths for a new model, load it in NNSight and inspect the trace graph. See [backends.md](backends.md) for details.
 
+After drafting a mapping, soft-validate it without running full attribution::
+
+```python
+from circuit_tracer import ModelMapping, validate_mapping
+
+warnings = validate_mapping(my_mapping, "mistralai/Mistral-7B-v0.3")
+for warning in warnings:
+    print(warning)
+```
+
+## Steering & intervention plans
+
+```python
+from circuit_tracer import steer, summarize_interventions, save_intervention_plan, run_intervention_plan
+
+plan = summarize_interventions(graph, n=5, value=0.0)
+save_intervention_plan(plan, "ablate_top5.json")
+
+# Compact amplify / suppress API
+logits, _ = steer(model, prompt, suppress=[(21, 7, 5066)], amplify=[(10, 3, 42, 2.0)])
+
+# Or reload and execute a saved plan
+results = run_intervention_plan(model, prompt, plan="ablate_top5.json")
+```
+
+## Dataset-scale analysis
+
+```python
+from circuit_tracer import CircuitDataset, compare_datasets
+
+baseline = CircuitDataset.from_prompts(prompts, model, labels=labels)
+baseline.save("baseline_circuits/")
+current = CircuitDataset.from_prompts(prompts, finetuned_model)
+drift = compare_datasets(baseline, current)
+print(drift.to_dict())
+```
+
 ## API Reference
 
 ### Top-Level Exports
@@ -205,17 +242,26 @@ To find the correct NNSight paths for a new model, load it in NNSight and inspec
 | Function | Description |
 |----------|-------------|
 | `attribute(prompt, model, **kwargs)` | Compute attribution graph for a single prompt |
-| `attribute_batch(prompts, model, **kwargs)` | Attribute multiple prompts sequentially |
+| `attribute_batch(prompts, model, max_workers=1, **kwargs)` | Attribute multiple prompts (optional data-parallel models) |
 | `get_top_features(graph, n=10)` | Top features by multi-hop influence |
 | `summarize_graph(graph, top_n=10)` | JSON-safe summary for package/evidence systems |
 | `graph_to_interventions(graph, n=10, value=0.0)` | Convert graph features to intervention tuples |
 | `summarize_interventions(graph, n=10, value=0.0)` | JSON-safe feature-intervention plan |
 | `summarize_intervention_results(plan, baseline_logits, intervened_logits)` | JSON-safe observed intervention effects |
+| `validate_summary(doc)` / `load_summary` / `dump_summary` | Validate and I/O for `circuit-tracer.*.v1` JSON |
+| `steer(model, prompt, amplify=..., suppress=...)` | High-level feature amplify/ablate (+ optional generate) |
+| `save_intervention_plan` / `load_intervention_plan` | Persist intervention plans as JSON |
+| `run_intervention_plan(model, prompt, plan)` | Execute a plan and return results JSON |
+| `validate_intervention(model, prompt, ...)` | Observe (and optionally predict) intervention effects |
+| `CircuitDataset.from_prompts` / `.save` / `.load` | Dataset container for multi-prompt graphs |
+| `compare_datasets(baseline, current)` | Circuit drift between two datasets |
 | `prune_graph(graph, node_threshold, edge_threshold)` | Remove low-influence nodes/edges |
 | `compute_graph_scores(graph)` | Replacement + completeness metrics |
 | `compare_graphs(graphs, n_per_graph=20)` | Compare multiple graphs, find overlap |
 | `find_common_circuit(graphs, min_frequency=0.5)` | Features appearing across graphs |
+| `create_graph_files` / `export_graph_for_viz` | Frontend JSON export (+ serve hints) |
 | `register_model(mapping)` | Register new model architecture |
+| `validate_mapping(mapping, model_name=...)` | Soft-check mapping paths against an HF model |
 | `auto_detect_mapping(model_name)` | Check if a HF model is supported |
 | `get_supported_architectures()` | List registered architecture names |
 

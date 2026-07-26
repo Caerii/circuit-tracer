@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- JSON schema validation helpers (`validate_summary`, `load_summary`, `dump_summary`) and golden fixtures
+- CLI `summarize`, `interventions`, and `export-viz` commands (parity with analysis / viz APIs)
+- `steer()`, intervention plan load/save/run, and `validate_intervention()`
+- `validate_mapping()` for soft-checking `ModelMapping` paths
+- Parallel-capable `attribute_batch(..., max_workers=...)` with multi-model data parallel
+- `CircuitDataset` + `compare_datasets()` for multi-prompt circuit collections and drift
+- `export_graph_for_viz()` with local serve / Neuronpedia hints
+
 ## [0.6.0] - 2026-07-26
 
 ### Added
