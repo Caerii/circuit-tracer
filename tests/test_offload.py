@@ -4,8 +4,8 @@ import pytest
 import torch
 
 from circuit_tracer import ReplacementModel
-from circuit_tracer.attribution.attribute_transformerlens import attribute as attribute_tl
-from circuit_tracer.attribution.attribute_nnsight import attribute as attribute_nnsight
+from circuit_tracer.attribution.attribute import attribute as attribute_tl
+from circuit_tracer.attribution.attribute import attribute as attribute_nnsight
 from circuit_tracer.replacement_model.replacement_model_transformerlens import (
     TransformerLensReplacementModel,
 )

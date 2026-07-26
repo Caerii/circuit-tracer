@@ -9,7 +9,7 @@ from tqdm import tqdm
 from transformers import AutoConfig, Gemma2Config
 
 from circuit_tracer import Graph, ReplacementModel
-from circuit_tracer.attribution.attribute_nnsight import attribute
+from circuit_tracer.attribution.attribute import attribute
 from circuit_tracer.replacement_model.replacement_model_nnsight import (
     NNSightReplacementModel,
 )

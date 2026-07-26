@@ -348,6 +348,46 @@ class TransformerLensReplacementModel(HookedTransformer):
         finally:
             self.cfg.output_logits_soft_cap = current_softcap
 
+    # ── Unified attribution interface ──────────────────────────────────
+    # These properties/methods allow the unified _run_attribution in
+    # attribute.py to work identically across both backends.
+
+    @property
+    def unembed_proj(self) -> torch.Tensor:
+        """Unembedding matrix, backend-agnostic accessor."""
+        return self.unembed.W_U  # type: ignore[return-value]
+
+    @property
+    def model_config(self):
+        """Model configuration object, backend-agnostic accessor."""
+        return self.cfg
+
+    def run_forward_pass(self, input_ids: torch.Tensor, batch_size: int, ctx) -> None:
+        """Execute the forward pass and cache residual activations."""
+        with ctx.install_hooks(self):
+            residual = self.forward(  # type: ignore[call-overload]
+                input_ids.expand(batch_size, -1), stop_at_layer=self.cfg.n_layers
+            )
+            ctx._resid_activations[-1] = self.ln_final(residual)
+
+    def _transcoders_as_list(self) -> list:
+        """Wrap transcoders in a list, handling both iterable TranscoderSet and single CLT."""
+        if hasattr(self.transcoders, "__iter__"):
+            return list(self.transcoders)  # type: ignore[arg-type]
+        return [self.transcoders]
+
+    def get_offload_targets_phase0(self) -> list:
+        """Modules to offload after precomputation (Phase 0)."""
+        return self._transcoders_as_list()
+
+    def get_offload_targets_phase1(self) -> list:
+        """Modules to offload after forward pass (Phase 1)."""
+        return [block.mlp for block in self.blocks]
+
+    def get_offload_targets_phase2(self) -> list:
+        """Modules to offload after building input vectors (Phase 2)."""
+        return [self.unembed, self.embed]
+
     def ensure_tokenized(self, prompt: str | torch.Tensor | list[int]) -> torch.Tensor:
         """Convert prompt to 1-D tensor of token ids with proper special token handling."""
         return _ensure_tokenized(prompt, self.tokenizer, self.cfg.device, self.cfg.model_name)

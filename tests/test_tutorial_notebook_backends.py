@@ -5,10 +5,8 @@ import pytest
 import torch
 
 from circuit_tracer.replacement_model import ReplacementModel
-from circuit_tracer.attribution.attribute_nnsight import attribute as attribute_nnsight
-from circuit_tracer.attribution.attribute_transformerlens import (
-    attribute as attribute_transformerlens,
-)
+from circuit_tracer.attribution.attribute import attribute as attribute_nnsight
+from circuit_tracer.attribution.attribute import attribute as attribute_transformerlens
 from circuit_tracer.attribution.targets import CustomTarget
 from circuit_tracer.graph import compute_node_influence
 from circuit_tracer.utils.demo_utils import get_unembed_vecs

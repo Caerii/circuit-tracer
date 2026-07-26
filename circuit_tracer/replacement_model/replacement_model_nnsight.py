@@ -411,6 +411,62 @@ class NNSightReplacementModel(LanguageModel):
         else:
             yield
 
+    # ── Unified attribution interface ──────────────────────────────────
+    # These properties/methods allow the unified _run_attribution in
+    # attribute.py to work identically across both backends.
+
+    @property
+    def unembed_proj(self) -> torch.Tensor:
+        """Unembedding matrix, backend-agnostic accessor."""
+        return cast(torch.Tensor, self.unembed_weight)
+
+    @property
+    def model_config(self):
+        """Model configuration object, backend-agnostic accessor."""
+        return self.cfg
+
+    def run_forward_pass(self, input_ids: torch.Tensor, batch_size: int, ctx) -> None:
+        """Execute the forward pass and cache residual activations."""
+        with self.trace() as tracer:
+            with tracer.invoke(input_ids.expand(batch_size, -1)):
+                pass
+
+            detach_barrier = tracer.barrier(2)
+
+            self.configure_gradient_flow(tracer)
+            self.configure_skip_connection(tracer, barrier=detach_barrier)
+            ctx.cache_residual(self, tracer, barrier=detach_barrier)
+
+    def _transcoders_as_list(self) -> list:
+        """Wrap transcoders in a list, handling both iterable TranscoderSet and single CLT."""
+        if hasattr(self.transcoders, "__iter__"):
+            return list(self.transcoders)  # type: ignore[arg-type]
+        return [self.transcoders]
+
+    def get_offload_targets_phase0(self) -> list:
+        """Modules to offload after precomputation (Phase 0)."""
+        if not self.skip_transcoder:
+            return self._transcoders_as_list()
+        return []
+
+    def get_offload_targets_phase1(self) -> list:
+        """Modules to offload after forward pass (Phase 1)."""
+        targets = [layer.mlp for layer in getattr(self.pre_logit_location, "layers")]
+        if self.skip_transcoder:
+            targets += self._transcoders_as_list()
+        return targets
+
+    def get_offload_targets_phase2(self) -> list:
+        """Modules to offload after building input vectors (Phase 2)."""
+        targets = [self.embed_location]
+        tied_embeds = (
+            self.embed_weight.untyped_storage().data_ptr()  # type:ignore
+            == self.unembed_weight.untyped_storage().data_ptr()  # type:ignore
+        )
+        if not tied_embeds:
+            targets.append(self.lm_head)
+        return targets
+
     def ensure_tokenized(self, prompt: str | torch.Tensor | list[int]) -> torch.Tensor:
         """Convert prompt to 1-D tensor of token ids with proper special token handling."""
         return _ensure_tokenized(prompt, self.tokenizer, self.device, self.cfg.model_name)
