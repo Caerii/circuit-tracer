@@ -284,9 +284,7 @@ def summarize_interventions(
             "tupleFormat": ["layer", "position", "feature", "value"],
             "executed": False,
         },
-        "interventionType": (
-            "feature_ablation" if intervention_value == 0.0 else "feature_set"
-        ),
+        "interventionType": ("feature_ablation" if intervention_value == 0.0 else "feature_set"),
         "value": intervention_value,
         "interventionCount": len(features),
         "interventions": [
@@ -390,9 +388,7 @@ def summarize_intervention_results(
     after = _final_logits(intervened_logits)
 
     if before.shape != after.shape:
-        raise ValueError(
-            "Baseline and intervened logits must have the same final dimension"
-        )
+        raise ValueError("Baseline and intervened logits must have the same final dimension")
 
     target_ids = [int(token_id) for token_id in (target_token_ids or [])]
     delta = after - before
@@ -408,9 +404,7 @@ def summarize_intervention_results(
             "interventionType": intervention_summary.get("interventionType"),
             "value": intervention_summary.get("value"),
             "interventionCount": intervention_summary.get("interventionCount"),
-            "interventions": copy.deepcopy(
-                intervention_summary.get("interventions", [])
-            ),
+            "interventions": copy.deepcopy(intervention_summary.get("interventions", [])),
         },
         "runtime": {
             "function": "ReplacementModel.feature_intervention",
