@@ -29,6 +29,9 @@ uv sync --group dev
 
 # (Optional) Install visualisation extras
 uv sync --group dev --group viz
+
+# (Optional) Neuronpedia upload SDK
+uv pip install -e ".[neuronpedia]"
 ```
 
 ## Development Workflow
@@ -45,9 +48,26 @@ uv run ruff check --fix
 # Type checking (must pass with 0 errors)
 uv run pyright
 
-# Tests (non-GPU suite)
-uv run pytest tests -m "not requires_disk and not requires_gpu" -q
+# Tests (CPU CI suite)
+uv run pytest tests -m "not requires_disk and not requires_gpu and not slow" -q
 ```
+
+### GPU / VRAM-tiered tests
+
+GitHub CI stays CPU-only. On a local CUDA machine (or self-hosted runner):
+
+```bash
+# Inspect detected GPUs
+uv run python -c "from circuit_tracer.utils.cuda_info import get_cuda_capabilities; print(get_cuda_capabilities())"
+
+# RTX 3080-class (~10GB): smoke + mid-tier GPU tests
+uv run pytest -m "requires_gpu and vram_10gb" -q
+
+# Heavy suites (24GB/32GB cards)
+uv run pytest -m "requires_gpu and vram_32gb" -q
+```
+
+Markers: `requires_gpu`, `vram_8gb`, `vram_10gb`, `vram_24gb`, `vram_32gb`, `slow`, `requires_disk`.
 
 CI runs these same checks on Python 3.10, 3.11, and 3.12.
 

@@ -11,7 +11,6 @@ from circuit_tracer import ReplacementModel, attribute
 from circuit_tracer.replacement_model.replacement_model_nnsight import NNSightReplacementModel
 from circuit_tracer.transcoder import SingleLayerTranscoder, TranscoderSet
 from circuit_tracer.transcoder.activation_functions import TopK
-from tests.conftest import has_32gb
 
 sys.path.append(os.path.dirname(__file__))
 from test_attributions_gemma_nnsight import verify_feature_edges, verify_token_and_error_edges
@@ -151,7 +150,8 @@ def test_large_llama_model():
         tokenizer_class.all_special_ids = original_all_special_ids  # type:ignore
 
 
-@pytest.mark.skipif(not has_32gb, reason="Requires >=32GB VRAM")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_32gb
 def test_llama_3_2_1b():
     s = "The National Digital Analytics Group (ND"
     model = ReplacementModel.from_pretrained(

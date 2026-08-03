@@ -20,8 +20,17 @@ if TYPE_CHECKING:
     )
     from circuit_tracer.attribution.attribute import attribute, attribute_batch
     from circuit_tracer.attribution.targets import CustomTarget
-    from circuit_tracer.dataset import CircuitDataset, CircuitRecord, compare_datasets
+    from circuit_tracer.dataset import (
+        CircuitClusterResult,
+        CircuitDataset,
+        CircuitRecord,
+        DatasetSummary,
+        cluster_circuits,
+        compare_datasets,
+        summarize_dataset,
+    )
     from circuit_tracer.graph import Graph, PruneResult, compute_graph_scores, prune_graph
+    from circuit_tracer.neuronpedia import fetch_feature, upload_graph_to_neuronpedia
     from circuit_tracer.replacement_model import ReplacementModel
     from circuit_tracer.replacement_model.common import Intervention
     from circuit_tracer.schema import SchemaError, dump_summary, load_summary, validate_summary
@@ -33,6 +42,7 @@ if TYPE_CHECKING:
         validate_intervention,
     )
     from circuit_tracer.utils.create_graph_files import create_graph_files, export_graph_for_viz
+    from circuit_tracer.utils.cuda_info import get_cuda_capabilities
     from circuit_tracer.utils.tl_nnsight_mapping import (
         ModelMapping,
         auto_detect_mapping,
@@ -78,6 +88,14 @@ __all__ = [
     "CircuitDataset",
     "CircuitRecord",
     "compare_datasets",
+    "cluster_circuits",
+    "summarize_dataset",
+    "CircuitClusterResult",
+    "DatasetSummary",
+    # ── Neuronpedia & CUDA helpers ──────────────────────────────────
+    "upload_graph_to_neuronpedia",
+    "fetch_feature",
+    "get_cuda_capabilities",
     # ── Model extensibility ─────────────────────────────────────────
     "ModelMapping",
     "register_model",
@@ -133,6 +151,17 @@ def __getattr__(name):
         "CircuitDataset": ("circuit_tracer.dataset", "CircuitDataset"),
         "CircuitRecord": ("circuit_tracer.dataset", "CircuitRecord"),
         "compare_datasets": ("circuit_tracer.dataset", "compare_datasets"),
+        "cluster_circuits": ("circuit_tracer.dataset", "cluster_circuits"),
+        "summarize_dataset": ("circuit_tracer.dataset", "summarize_dataset"),
+        "CircuitClusterResult": ("circuit_tracer.dataset", "CircuitClusterResult"),
+        "DatasetSummary": ("circuit_tracer.dataset", "DatasetSummary"),
+        # Neuronpedia & CUDA helpers
+        "upload_graph_to_neuronpedia": (
+            "circuit_tracer.neuronpedia",
+            "upload_graph_to_neuronpedia",
+        ),
+        "fetch_feature": ("circuit_tracer.neuronpedia", "fetch_feature"),
+        "get_cuda_capabilities": ("circuit_tracer.utils.cuda_info", "get_cuda_capabilities"),
         # Model extensibility
         "ModelMapping": ("circuit_tracer.utils.tl_nnsight_mapping", "ModelMapping"),
         "register_model": ("circuit_tracer.utils.tl_nnsight_mapping", "register_model"),

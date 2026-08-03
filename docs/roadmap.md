@@ -60,7 +60,6 @@ Before v0.6.0, a user who called `attribute()` and got a `Graph` had no discover
 ### Still planned
 - Stronger cross-backend intervention parity tests in CI
 - Richer expected-effect APIs for custom target directions
-- First-class Neuronpedia upload (beyond export hints)
 
 ### Why it matters
 The mechanistic interpretability workflow is: attribute → identify circuit → intervene → confirm.  v0.6.0 covers the first two steps; v0.7.0 closes the loop with a production-quality intervention API.  This is what enables practical applications like safety monitoring and model behavior modification.
@@ -74,11 +73,13 @@ The mechanistic interpretability workflow is: attribute → identify circuit →
 ### Shipped early
 - **`attribute_batch(..., max_workers=)`** with multi-model data parallel
 - **`CircuitDataset`** save/load + **`compare_datasets()`** drift helper
+- **`cluster_circuits()`** — Jaccard / cosine agglomerative clustering of top features
+- **`summarize_dataset()`** — feature frequencies, mean influence, bootstrap CIs, per-label breakdown
+- **VRAM-tiered GPU helpers** — `get_cuda_capabilities()` + pytest markers for 8/10/24/32GB cards
 
 ### Still planned
 - Multi-GPU orchestration helpers
-- Circuit clustering
-- Confidence intervals / aggregated statistical summaries
+- Circuit clustering refinements (soft clustering / embeddings)
 
 ### Why it matters
 Single-prompt analysis answers "what circuit did the model use here?"  Dataset-level analysis answers "what circuits does the model use for this *class* of inputs?" — the question regulators, auditors, and alignment researchers actually need answered.
@@ -112,7 +113,7 @@ If circuit-tracer only works on 6 architectures, it's a research tool.  If it wo
 - **Performance benchmarks** — tracked per-release attribution throughput on reference hardware
 - **Integration with SAELens, Baukit, pyvene** — interoperability with the broader interpretability ecosystem
 - **Standard interchange format** — portable graph format beyond PyTorch pickle (HDF5 or protocol buffers)
-- **Neuronpedia deep integration** — bidirectional: export to and import from Neuronpedia in a single call
+- **Neuronpedia deep integration** — `upload_graph_to_neuronpedia` / `fetch_feature` via optional extra *(shipped early)*; batch feature/activation upload still planned
 
 ### Why it matters
 1.0 is the signal to the community that circuit-tracer is stable enough to build on.  Ecosystem integration means researchers don't have to choose between tools — circuit-tracer becomes the analysis layer that connects them.

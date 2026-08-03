@@ -226,13 +226,33 @@ results = run_intervention_plan(model, prompt, plan="ablate_top5.json")
 ## Dataset-scale analysis
 
 ```python
-from circuit_tracer import CircuitDataset, compare_datasets
+from circuit_tracer import CircuitDataset, compare_datasets, cluster_circuits, summarize_dataset
 
 baseline = CircuitDataset.from_prompts(prompts, model, labels=labels)
 baseline.save("baseline_circuits/")
 current = CircuitDataset.from_prompts(prompts, finetuned_model)
 drift = compare_datasets(baseline, current)
 print(drift.to_dict())
+
+clusters = cluster_circuits(baseline, n_per_graph=20, method="jaccard", threshold=0.5)
+stats = summarize_dataset(baseline, n_per_graph=20, bootstrap=500)
+print(clusters.to_dict()["clusterMembers"])
+print(stats.mean_replacement_score)
+```
+
+## Neuronpedia upload
+
+```bash
+pip install 'circuit-tracer[neuronpedia]'
+export NEURONPEDIA_API_KEY=...
+circuit-tracer upload-neuronpedia -g france_capital.pt --slug france-capital --graph_file_dir ./graph_files
+```
+
+```python
+from circuit_tracer import upload_graph_to_neuronpedia, fetch_feature
+
+meta = upload_graph_to_neuronpedia("france_capital.pt", slug="france-capital", output_dir="./graph_files")
+feature = fetch_feature("gemma-2-2b", "0-gemmascope-res-16k", 123)
 ```
 
 ## API Reference
@@ -254,7 +274,10 @@ print(drift.to_dict())
 | `run_intervention_plan(model, prompt, plan)` | Execute a plan and return results JSON |
 | `validate_intervention(model, prompt, ...)` | Observe (and optionally predict) intervention effects |
 | `CircuitDataset.from_prompts` / `.save` / `.load` | Dataset container for multi-prompt graphs |
+| `cluster_circuits(dataset, ...)` / `summarize_dataset(dataset, ...)` | Clustering + bootstrap dataset stats |
 | `compare_datasets(baseline, current)` | Circuit drift between two datasets |
+| `upload_graph_to_neuronpedia` / `fetch_feature` | Neuronpedia upload / SAE feature fetch (optional extra) |
+| `get_cuda_capabilities()` | Detect CUDA devices + VRAM for gating |
 | `prune_graph(graph, node_threshold, edge_threshold)` | Remove low-influence nodes/edges |
 | `compute_graph_scores(graph)` | Replacement + completeness metrics |
 | `compare_graphs(graphs, n_per_graph=20)` | Compare multiple graphs, find overlap |

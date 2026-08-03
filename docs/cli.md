@@ -52,6 +52,7 @@ circuit-tracer start-server --graph_file_dir ./graph_files
 | `summarize` | Emit `circuit-tracer.summary.v1` JSON from a `.pt` graph |
 | `interventions` | Emit `circuit-tracer.interventions.v1` plan JSON from a `.pt` graph |
 | `export-viz` | Write frontend JSON via `export_graph_for_viz` |
+| `upload-neuronpedia` | Upload `.pt` / frontend JSON to Neuronpedia (`NEURONPEDIA_API_KEY`) |
 | `start-server` | Serve an existing graph JSON directory |
 
 ## Arguments
@@ -125,6 +126,13 @@ circuit-tracer attribute --prompt "..." --transcoder_set gemma \
 Then open `http://localhost:8041` in your local browser.
 
 ## Interventions on Neuronpedia
+
+Install the optional extra and set `NEURONPEDIA_API_KEY` (from neuronpedia.org/account):
+
+```bash
+pip install 'circuit-tracer[neuronpedia]'
+circuit-tracer upload-neuronpedia -g graph.pt --slug my-graph --graph_file_dir ./graph_files
+```
 
 For Gemma-2 (2B), you can also perform interventions directly on [Neuronpedia](https://www.neuronpedia.org):
 1. Pin at least one node in the graph

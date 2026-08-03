@@ -35,7 +35,10 @@ uv add circuit-tracer
 # Visualization dependencies (seaborn, ipykernel, ipywidgets)
 pip install circuit-tracer[viz]
 
-# Everything (viz + dev tools)
+# Neuronpedia upload / feature fetch SDK
+pip install circuit-tracer[neuronpedia]
+
+# Everything (viz + neuronpedia + dev tools)
 pip install circuit-tracer[all]
 ```
 

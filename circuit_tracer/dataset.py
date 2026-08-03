@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import json
+import math
+from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+import numpy as np
 
 from circuit_tracer.analysis import (
     ComparisonResult,
     compare_graphs,
+    compute_graph_scores,
     find_common_circuit,
     get_top_features,
 )
@@ -21,10 +26,16 @@ __all__ = [
     "CircuitRecord",
     "CircuitDataset",
     "DatasetDriftResult",
+    "CircuitClusterResult",
+    "DatasetSummary",
     "compare_datasets",
+    "cluster_circuits",
+    "summarize_dataset",
 ]
 
 _MANIFEST_NAME = "manifest.json"
+
+FeatureKey = tuple[int, int, int]
 
 
 @dataclass
@@ -45,9 +56,9 @@ class DatasetDriftResult:
     paired: bool
     n_baseline: int
     n_current: int
-    shared_features: list[tuple[int, int, int]]
-    baseline_only: list[tuple[int, int, int]]
-    current_only: list[tuple[int, int, int]]
+    shared_features: list[FeatureKey]
+    baseline_only: list[FeatureKey]
+    current_only: list[FeatureKey]
     comparison: ComparisonResult | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -60,6 +71,66 @@ class DatasetDriftResult:
             "sharedFeatures": [list(f) for f in self.shared_features],
             "baselineOnly": [list(f) for f in self.baseline_only],
             "currentOnly": [list(f) for f in self.current_only],
+        }
+
+
+@dataclass
+class CircuitClusterResult:
+    """Result of clustering circuits by top-feature overlap."""
+
+    labels: list[int]
+    distance_matrix: list[list[float]]
+    cluster_members: dict[int, list[int]]
+    representative_features: dict[int, list[FeatureKey]]
+    method: str
+    threshold: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": "circuit-tracer.circuit-clusters.v1",
+            "version": 1,
+            "method": self.method,
+            "threshold": self.threshold,
+            "labels": self.labels,
+            "distanceMatrix": self.distance_matrix,
+            "clusterMembers": {str(k): v for k, v in self.cluster_members.items()},
+            "representativeFeatures": {
+                str(k): [list(f) for f in feats]
+                for k, feats in self.representative_features.items()
+            },
+        }
+
+
+@dataclass
+class DatasetSummary:
+    """Aggregate / bootstrap statistics over a circuit dataset."""
+
+    n_graphs: int
+    n_per_graph: int
+    feature_frequency: dict[FeatureKey, float]
+    feature_frequency_ci: dict[FeatureKey, tuple[float, float]]
+    mean_influence: dict[FeatureKey, float]
+    mean_replacement_score: float
+    mean_completeness_score: float
+    per_label: dict[str, dict[str, Any]]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": "circuit-tracer.dataset-summary.v1",
+            "version": 1,
+            "nGraphs": self.n_graphs,
+            "nPerGraph": self.n_per_graph,
+            "featureFrequency": {
+                f"{a}:{b}:{c}": v for (a, b, c), v in self.feature_frequency.items()
+            },
+            "featureFrequencyCi": {
+                f"{a}:{b}:{c}": [lo, hi]
+                for (a, b, c), (lo, hi) in self.feature_frequency_ci.items()
+            },
+            "meanInfluence": {f"{a}:{b}:{c}": v for (a, b, c), v in self.mean_influence.items()},
+            "meanReplacementScore": self.mean_replacement_score,
+            "meanCompletenessScore": self.mean_completeness_score,
+            "perLabel": self.per_label,
         }
 
 
@@ -183,15 +254,31 @@ class CircuitDataset:
             )
         return cls(records)
 
-    def top_features(self, n_per_graph: int = 20) -> list[list[tuple[int, int, int]]]:
+    def top_features(self, n_per_graph: int = 20) -> list[list[FeatureKey]]:
         return [get_top_features(graph, n_per_graph)[0] for graph in self.graphs]
 
-    def common_circuit(
-        self, min_frequency: float = 0.5, n_per_graph: int = 20
-    ) -> list[tuple[int, int, int]]:
+    def common_circuit(self, min_frequency: float = 0.5, n_per_graph: int = 20) -> list[FeatureKey]:
         return find_common_circuit(
             self.graphs, min_frequency=min_frequency, n_per_graph=n_per_graph
         )
+
+    def cluster(
+        self,
+        n_per_graph: int = 20,
+        *,
+        method: Literal["jaccard", "cosine"] = "jaccard",
+        threshold: float = 0.5,
+    ) -> CircuitClusterResult:
+        return cluster_circuits(self, n_per_graph=n_per_graph, method=method, threshold=threshold)
+
+    def summarize(
+        self,
+        n_per_graph: int = 20,
+        *,
+        bootstrap: int = 1000,
+        seed: int = 0,
+    ) -> DatasetSummary:
+        return summarize_dataset(self, n_per_graph=n_per_graph, bootstrap=bootstrap, seed=seed)
 
 
 def compare_datasets(
@@ -201,12 +288,7 @@ def compare_datasets(
     n_per_graph: int = 20,
     pair_by_prompt: bool = True,
 ) -> DatasetDriftResult:
-    """Detect circuit drift between two datasets.
-
-    When *pair_by_prompt* is true, only prompts present in both datasets are
-    compared via :func:`~circuit_tracer.analysis.compare_graphs` on the paired
-    graph lists. Otherwise feature sets are pooled independently.
-    """
+    """Detect circuit drift between two datasets."""
     baseline_graphs = baseline.graphs
     current_graphs = current.graphs
 
@@ -223,7 +305,6 @@ def compare_datasets(
             list(paired_baseline) + list(paired_current),  # type: ignore[arg-type]
             n_per_graph=n_per_graph,
         )
-        # Recompute separate pools for baseline-only / current-only reporting
         baseline_feats = {
             feat
             for graph in paired_baseline
@@ -260,3 +341,216 @@ def compare_datasets(
         current_only=sorted(current_feats - baseline_feats),
         comparison=None,
     )
+
+
+def _feature_sets_and_weights(
+    dataset: CircuitDataset, n_per_graph: int
+) -> tuple[list[set[FeatureKey]], list[dict[FeatureKey, float]]]:
+    sets: list[set[FeatureKey]] = []
+    weights: list[dict[FeatureKey, float]] = []
+    for graph in dataset.graphs:
+        features, scores = get_top_features(graph, n_per_graph)
+        sets.append(set(features))
+        weights.append({feat: float(score) for feat, score in zip(features, scores)})
+    return sets, weights
+
+
+def _jaccard_distance(a: set[FeatureKey], b: set[FeatureKey]) -> float:
+    if not a and not b:
+        return 0.0
+    union = a | b
+    if not union:
+        return 0.0
+    return 1.0 - (len(a & b) / len(union))
+
+
+def _cosine_distance(a: dict[FeatureKey, float], b: dict[FeatureKey, float]) -> float:
+    keys = set(a) | set(b)
+    if not keys:
+        return 0.0
+    va = np.array([a.get(k, 0.0) for k in keys], dtype=np.float64)
+    vb = np.array([b.get(k, 0.0) for k in keys], dtype=np.float64)
+    denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
+    if denom == 0.0:
+        return 1.0
+    return float(1.0 - np.dot(va, vb) / denom)
+
+
+def _average_linkage_distance(
+    dist: np.ndarray, cluster_a: list[int], cluster_b: list[int]
+) -> float:
+    total = 0.0
+    count = 0
+    for i in cluster_a:
+        for j in cluster_b:
+            total += float(dist[i, j])
+            count += 1
+    return total / count if count else 0.0
+
+
+def cluster_circuits(
+    dataset: CircuitDataset,
+    n_per_graph: int = 20,
+    *,
+    method: Literal["jaccard", "cosine"] = "jaccard",
+    threshold: float = 0.5,
+) -> CircuitClusterResult:
+    """Cluster graphs by top-feature overlap using thresholded agglomerative linkage.
+
+    Default distance is Jaccard on top-*n* feature sets. Clusters merge while the
+    average-linkage distance stays ``<= threshold``.
+    """
+    if len(dataset) == 0:
+        raise ValueError("Cannot cluster an empty dataset")
+
+    feature_sets, weights = _feature_sets_and_weights(dataset, n_per_graph)
+    n = len(feature_sets)
+    dist = np.zeros((n, n), dtype=np.float64)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if method == "jaccard":
+                d = _jaccard_distance(feature_sets[i], feature_sets[j])
+            elif method == "cosine":
+                d = _cosine_distance(weights[i], weights[j])
+            else:
+                raise ValueError(f"Unknown method: {method}")
+            dist[i, j] = dist[j, i] = d
+
+    clusters: dict[int, list[int]] = {i: [i] for i in range(n)}
+    active = set(range(n))
+    next_id = n
+
+    while True:
+        best_pair: tuple[int, int] | None = None
+        best_dist = float("inf")
+        active_list = sorted(active)
+        for ai, ca in enumerate(active_list):
+            for cb in active_list[ai + 1 :]:
+                d = _average_linkage_distance(dist, clusters[ca], clusters[cb])
+                if d < best_dist:
+                    best_dist = d
+                    best_pair = (ca, cb)
+        if best_pair is None or best_dist > threshold:
+            break
+        ca, cb = best_pair
+        clusters[next_id] = clusters.pop(ca) + clusters.pop(cb)
+        active.remove(ca)
+        active.remove(cb)
+        active.add(next_id)
+        next_id += 1
+
+    labels = [0] * n
+    cluster_members: dict[int, list[int]] = {}
+    representative_features: dict[int, list[FeatureKey]] = {}
+    for label, cluster_id in enumerate(sorted(active)):
+        members = sorted(clusters[cluster_id])
+        cluster_members[label] = members
+        for member in members:
+            labels[member] = label
+        freq: Counter[FeatureKey] = Counter()
+        for member in members:
+            freq.update(feature_sets[member])
+        representative_features[label] = [feat for feat, _ in freq.most_common(n_per_graph)]
+
+    return CircuitClusterResult(
+        labels=labels,
+        distance_matrix=dist.tolist(),
+        cluster_members=cluster_members,
+        representative_features=representative_features,
+        method=method,
+        threshold=threshold,
+    )
+
+
+def summarize_dataset(
+    dataset: CircuitDataset,
+    n_per_graph: int = 20,
+    *,
+    bootstrap: int = 1000,
+    seed: int = 0,
+) -> DatasetSummary:
+    """Aggregate feature frequencies, influences, and bootstrap CIs."""
+    graphs = dataset.graphs
+    n = len(graphs)
+    if n == 0:
+        raise ValueError("Cannot summarize an empty dataset")
+
+    per_graph_features: list[list[FeatureKey]] = []
+    per_graph_scores: list[dict[FeatureKey, float]] = []
+    replacement_scores: list[float] = []
+    completeness_scores: list[float] = []
+
+    for graph in graphs:
+        features, scores = get_top_features(graph, n_per_graph)
+        per_graph_features.append(features)
+        per_graph_scores.append({feat: float(score) for feat, score in zip(features, scores)})
+        replacement, completeness = compute_graph_scores(graph)
+        replacement_scores.append(float(replacement))
+        completeness_scores.append(float(completeness))
+
+    frequency_counts: Counter[FeatureKey] = Counter()
+    influence_sums: dict[FeatureKey, float] = defaultdict(float)
+    for features, scores in zip(per_graph_features, per_graph_scores):
+        frequency_counts.update(features)
+        for feat, score in scores.items():
+            influence_sums[feat] += score
+
+    feature_frequency = {feat: count / n for feat, count in frequency_counts.items()}
+    mean_influence = {
+        feat: influence_sums[feat] / frequency_counts[feat] for feat in frequency_counts
+    }
+
+    rng = np.random.default_rng(seed)
+    feature_frequency_ci: dict[FeatureKey, tuple[float, float]] = {}
+    feature_list = list(frequency_counts)
+    if bootstrap > 0 and feature_list:
+        samples = np.zeros((bootstrap, len(feature_list)), dtype=np.float64)
+        for b in range(bootstrap):
+            indices = rng.integers(0, n, size=n)
+            counts: Counter[FeatureKey] = Counter()
+            for idx in indices:
+                counts.update(per_graph_features[int(idx)])
+            for j, feat in enumerate(feature_list):
+                samples[b, j] = counts.get(feat, 0) / n
+        for j, feat in enumerate(feature_list):
+            lo, hi = np.quantile(samples[:, j], [0.025, 0.975])
+            feature_frequency_ci[feat] = (float(lo), float(hi))
+
+    per_label: dict[str, dict[str, Any]] = {}
+    label_groups: dict[str, list[int]] = defaultdict(list)
+    for index, label in enumerate(dataset.labels):
+        if label is not None:
+            label_groups[str(label)].append(index)
+    for label, indices in label_groups.items():
+        label_freq: Counter[FeatureKey] = Counter()
+        for idx in indices:
+            label_freq.update(per_graph_features[idx])
+        per_label[label] = {
+            "nGraphs": len(indices),
+            "featureFrequency": {
+                f"{a}:{b}:{c}": count / len(indices) for (a, b, c), count in label_freq.items()
+            },
+            "meanReplacementScore": _finite_mean([replacement_scores[i] for i in indices]),
+            "meanCompletenessScore": _finite_mean([completeness_scores[i] for i in indices]),
+        }
+
+    return DatasetSummary(
+        n_graphs=n,
+        n_per_graph=n_per_graph,
+        feature_frequency=feature_frequency,
+        feature_frequency_ci=feature_frequency_ci,
+        mean_influence=mean_influence,
+        mean_replacement_score=_finite_mean(replacement_scores),
+        mean_completeness_score=_finite_mean(completeness_scores),
+        per_label=per_label,
+    )
+
+
+def _finite_mean(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    arr = np.asarray(values, dtype=np.float64)
+    if arr.size == 0 or np.all(np.isnan(arr)):
+        return 0.0
+    mean = float(np.nanmean(arr))
+    return 0.0 if math.isnan(mean) else mean

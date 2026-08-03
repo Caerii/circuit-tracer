@@ -275,6 +275,41 @@ def main():
         help="Optional path to write the viz-export metadata JSON (default: stdout).",
     )
 
+    upload_parser = subparsers.add_parser(
+        "upload-neuronpedia",
+        help="Upload a graph (.pt or frontend .json) to Neuronpedia (requires API key)",
+    )
+    upload_parser.add_argument(
+        "-g",
+        "--graph",
+        required=True,
+        help="Path to a Graph .pt file or frontend .json file.",
+    )
+    upload_parser.add_argument(
+        "--model-id",
+        type=str,
+        default=None,
+        help="Optional Neuronpedia model id override for the result metadata.",
+    )
+    upload_parser.add_argument("--slug", type=str, default=None, help="Upload slug when exporting.")
+    upload_parser.add_argument(
+        "--graph_file_dir",
+        type=str,
+        default=None,
+        help="Directory for intermediate frontend JSON when uploading from .pt.",
+    )
+    upload_parser.add_argument(
+        "--node_threshold", type=float, default=DEFAULT_NODE_THRESHOLD, help="Node prune threshold."
+    )
+    upload_parser.add_argument(
+        "--edge_threshold", type=float, default=DEFAULT_EDGE_THRESHOLD, help="Edge prune threshold."
+    )
+    upload_parser.add_argument(
+        "-o",
+        "--output",
+        help="Optional path to write upload metadata JSON (default: stdout).",
+    )
+
     args = parser.parse_args()
 
     if args.command == "attribute":
@@ -289,6 +324,8 @@ def main():
         run_interventions(args)
     elif args.command == "export-viz":
         run_export_viz(args)
+    elif args.command == "upload-neuronpedia":
+        run_upload_neuronpedia(args)
 
 
 def _write_json(doc, output_path: str | None) -> None:
@@ -349,6 +386,22 @@ def run_export_viz(args):
         neuronpedia_set=args.neuronpedia_set,
     )
     logging.info(result["serveCommand"])
+    _write_json(result, args.output)
+
+
+def run_upload_neuronpedia(args):
+    from circuit_tracer.neuronpedia import upload_graph_to_neuronpedia
+
+    result = upload_graph_to_neuronpedia(
+        args.graph,
+        model_id=args.model_id,
+        slug=args.slug,
+        output_dir=args.graph_file_dir,
+        node_threshold=args.node_threshold,
+        edge_threshold=args.edge_threshold,
+    )
+    if result.get("url"):
+        logging.info(f"Uploaded: {result['url']}")
     _write_json(result, args.output)
 
 

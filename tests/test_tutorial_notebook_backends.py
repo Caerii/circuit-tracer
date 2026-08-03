@@ -9,10 +9,9 @@ from circuit_tracer.attribution.targets import CustomTarget
 from circuit_tracer.graph import compute_node_influence
 from circuit_tracer.replacement_model import ReplacementModel
 from circuit_tracer.utils.demo_utils import get_unembed_vecs
-from tests.conftest import has_32gb
 
 # decorator used to gate individual tests on available VRAM
-skip32gb = pytest.mark.skipif(not has_32gb, reason="Requires >=32GB VRAM")
+skip32gb = pytest.mark.vram_32gb
 
 
 def _move_replacement_model(model, device):

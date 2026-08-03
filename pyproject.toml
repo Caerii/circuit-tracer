@@ -55,6 +55,9 @@ viz = [
     "ipywidgets>=8.1.7",
     "seaborn>=0.13.2",
 ]
+neuronpedia = [
+    "neuronpedia>=1.2.0",
+]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.12.7",
@@ -64,7 +67,7 @@ dev = [
     "twine>=6.0.0",
 ]
 all = [
-    "circuit-tracer[viz,dev]",
+    "circuit-tracer[viz,dev,neuronpedia]",
 ]
 
 [project.scripts]
@@ -124,6 +127,10 @@ exclude = ["**/node_modules", "**/__pycache__", "**/.*", "demos"]
 markers = [
     "requires_disk: marks tests requiring storage space",
     "requires_gpu: marks tests requiring a CUDA GPU",
+    "vram_8gb: requires >=8GB CUDA VRAM",
+    "vram_10gb: requires >=10GB CUDA VRAM",
+    "vram_24gb: requires >=24GB CUDA VRAM",
+    "vram_32gb: requires >=32GB CUDA VRAM",
     "slow: marks computationally expensive tests excluded from routine CI",
 ]
 

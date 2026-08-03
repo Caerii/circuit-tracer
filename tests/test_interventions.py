@@ -13,7 +13,8 @@ def cleanup_cuda():
     gc.collect()
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_return_activations_tl():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
 
@@ -43,7 +44,8 @@ def test_intervention_return_activations_tl():
     assert no_activations is None, "Activations should be None when return_activations=False"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_return_activations_nnsight():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma", backend="nnsight")
 
@@ -73,7 +75,8 @@ def test_intervention_return_activations_nnsight():
     assert no_activations is None, "Activations should be None when return_activations=False"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_generate_return_activations_tl():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
 
@@ -119,7 +122,8 @@ def test_intervention_generate_return_activations_tl():
     assert no_activations is None, "Activations should be None when return_activations=False"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_generate_return_activations_nnsight():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma", backend="nnsight")
 
@@ -165,7 +169,8 @@ def test_intervention_generate_return_activations_nnsight():
     assert no_activations is None, "Activations should be None when return_activations=False"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_sparse_tl():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
 
@@ -201,7 +206,8 @@ def test_intervention_sparse_tl():
     ), "Activations should be identical regardless of sparse setting"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_sparse_nnsight():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma", backend="nnsight")
 
@@ -237,7 +243,8 @@ def test_intervention_sparse_nnsight():
     ), "Activations should be identical regardless of sparse setting"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_generate_sparse_tl():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
 
@@ -284,7 +291,8 @@ def test_intervention_generate_sparse_tl():
     ), "Activations should be identical regardless of sparse setting"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_generate_sparse_nnsight():
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma", backend="nnsight")
 
@@ -331,7 +339,8 @@ def test_intervention_generate_sparse_nnsight():
     ), "Activations should be identical regardless of sparse setting"
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_generate_logits_dim_tl():
     """Regression test: feature_intervention_generate must return 2-D logits (seq_len, vocab_size)."""
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
@@ -352,7 +361,8 @@ def test_intervention_generate_logits_dim_tl():
     )
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_intervention_generate_logits_dim_nnsight():
     """Regression test: feature_intervention_generate must return 2-D logits (seq_len, vocab_size)."""
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma", backend="nnsight")

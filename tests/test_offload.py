@@ -11,7 +11,6 @@ from circuit_tracer.replacement_model.replacement_model_nnsight import (
 from circuit_tracer.replacement_model.replacement_model_transformerlens import (
     TransformerLensReplacementModel,
 )
-from tests.conftest import has_32gb
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +20,8 @@ def cleanup_cuda():
     gc.collect()
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_10gb
 def test_offload_tl():
     s = "The National Digital Analytics Group (ND"
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma")
@@ -48,7 +48,8 @@ def test_offload_tl():
         assert param.device.type == original_device.type
 
 
-@pytest.mark.skipif(not has_32gb, reason="Requires >=32GB VRAM")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_32gb
 def test_offload_nnsight():
     s = "The National Digital Analytics Group (ND"
     model = ReplacementModel.from_pretrained("google/gemma-2-2b", "gemma", backend="nnsight")
@@ -75,7 +76,8 @@ def test_offload_nnsight():
         assert param.device.type == original_device.type
 
 
-@pytest.mark.skipif(not has_32gb, reason="Requires >=32GB VRAM")
+@pytest.mark.requires_gpu
+@pytest.mark.vram_32gb
 def test_offload_nnsight_gemma_3():
     s = "The National Digital Analytics Group (ND"
     model_name = "google/gemma-3-4b-pt"
